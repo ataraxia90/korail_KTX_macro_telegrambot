@@ -42,7 +42,7 @@ class Settings:
     LOG_FORMAT: str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
     # Magic Admin Login String
-    ADMIN_MAGIC_STRING: str = "근삼이최고"
+    ADMIN_MAGIC_STRING: str = "yubi"
 
     # Admin Command Authentication
     # Uses USERPW environment variable (same as Korail admin password)
