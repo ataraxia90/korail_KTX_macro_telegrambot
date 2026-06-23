@@ -27,7 +27,7 @@ class Settings:
 
     # Payment Reminder Configuration
     PAYMENT_TIMEOUT_MINUTES: int = int(os.environ.get('PAYMENT_TIMEOUT_MINUTES', '10'))
-    PAYMENT_REMINDER_INTERVAL_SECONDS: int = int(os.environ.get('PAYMENT_REMINDER_INTERVAL', '10'))
+    PAYMENT_REMINDER_INTERVAL_SECONDS: int = int(os.environ.get('PAYMENT_REMINDER_INTERVAL', '120'))
 
     # Flask Configuration
     FLASK_HOST: str = os.environ.get('FLASK_HOST', '0.0.0.0')

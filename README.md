@@ -145,7 +145,7 @@ make test-logic
   - korail2 라이브러리 import 확인
   - 필수 클래스 (Korail, TrainType, ReserveOption) 확인
   - Flask 및 Telegram Bot 의존성 확인
-  - 결제 리마인더 시간 설정 (10분, 10초 간격) 확인
+  - 결제 리마인더 시간 설정 (10분, 2분 간격) 확인
 
 ### 의존성 추가 시
 ```bash
