@@ -1,0 +1,27 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+flask = "*"
+flask-restful = "*"
+requests = "*"
+flask-cors = "*"
+python-telegram-bot = "*"
+pyopenssl = "*"
+korail2 = {git = "https://github.com/dhfhfk/korail2.git", ref = "bypassDynapath"}
+SRTrain = "*"
+redis = "*"
+hiredis = "*"
+
+[dev-packages]
+pytest = "*"
+pytest-cov = "*"
+pytest-mock = "*"
+pytest-asyncio = "*"
+freezegun = "*"
+testcontainers = {extras = ["redis"], version = "*"}
+
+[requires]
+python_version = "3.10"
