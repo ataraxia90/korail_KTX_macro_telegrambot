@@ -343,6 +343,10 @@ class RedisStorage(StorageInterface):
         else:
             self.redis.delete(key)
 
+    def save_current_seat_index(self, chat_id: int, index: Optional[int]) -> None:
+        """Backward-compatible alias for set_current_seat_index."""
+        self.set_current_seat_index(chat_id, index)
+
     def is_payment_ready(self, chat_id: int, seat_index: int) -> bool:
         """Check if payment is ready for a specific seat."""
         key = f"payment_ready:{chat_id}:{seat_index}"
@@ -407,6 +411,7 @@ class RedisStorage(StorageInterface):
                 "korail_pw": session.credentials.korail_pw
             } if session.credentials else None,
             "search_params": {
+                "provider": session.search_params.provider,
                 "dep_date": session.search_params.dep_date,
                 "src_locate": session.search_params.src_locate,
                 "dst_locate": session.search_params.dst_locate,
@@ -435,6 +440,7 @@ class RedisStorage(StorageInterface):
         if data.get("search_params"):
             p = data["search_params"]
             search_params = TrainSearchParams(
+                provider=p.get("provider", "KTX"),
                 dep_date=p["dep_date"],
                 src_locate=p["src_locate"],
                 dst_locate=p["dst_locate"],
@@ -465,6 +471,7 @@ class RedisStorage(StorageInterface):
             "process_id": reservation.process_id,
             "korail_id": reservation.korail_id,
             "search_params": {
+                "provider": reservation.search_params.provider,
                 "dep_date": reservation.search_params.dep_date,
                 "src_locate": reservation.search_params.src_locate,
                 "dst_locate": reservation.search_params.dst_locate,
@@ -481,6 +488,7 @@ class RedisStorage(StorageInterface):
         """Deserialize dict to RunningReservation."""
         p = data["search_params"]
         search_params = TrainSearchParams(
+            provider=p.get("provider", "KTX"),
             dep_date=p["dep_date"],
             src_locate=p["src_locate"],
             dst_locate=p["dst_locate"],

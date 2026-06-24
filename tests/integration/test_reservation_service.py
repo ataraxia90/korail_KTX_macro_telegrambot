@@ -72,6 +72,43 @@ class TestReservationService:
         assert running.process_id == 12345
         assert running.search_params.src_locate == "서울"
 
+    @patch('subprocess.Popen')
+    def test_start_srt_reservation_uses_srt_background_process(self, mock_popen):
+        """Test SRT reservations start the SRT background process."""
+        mock_process = Mock()
+        mock_process.pid = 54321
+        mock_popen.return_value = mock_process
+
+        chat_id = 99998
+        search_params = TrainSearchParams(
+            provider="SRT",
+            dep_date="20991231",
+            src_locate="수서",
+            dst_locate="부산",
+            dep_time="090000",
+            max_dep_time="1800",
+            train_type="SRT",
+            train_type_display="SRT",
+            special_option="ReserveOption.GENERAL_FIRST",
+            special_option_display="GENERAL_FIRST",
+            passenger_count=1,
+            seat_strategy="consecutive"
+        )
+
+        success = self.service.start_reservation_process(
+            chat_id=chat_id,
+            username="srt-user",
+            password="password123",
+            search_params=search_params
+        )
+
+        assert success is True
+        cmd = mock_popen.call_args[0][0]
+        assert cmd[:3] == ['python', '-m', 'telegramBot.srtBackProcess']
+
+        running = self.storage.get_running_reservation(chat_id)
+        assert running.search_params.provider == "SRT"
+
     def test_start_reservation_duplicate(self):
         """Test starting reservation when one is already running."""
         chat_id = 99999

@@ -53,3 +53,4 @@ class UserProgress:
     PASSENGER_COUNT_INPUT_SUCCESS = 12  # New: passenger count selection
     SEAT_STRATEGY_INPUT_SUCCESS = 13  # New: seat allocation strategy
     FINDING_TICKET = 14  # Updated from 12 to 14
+    PROVIDER_INPUT_SUCCESS = 15  # KTX/SRT provider selected

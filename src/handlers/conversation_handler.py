@@ -4,7 +4,7 @@ from korail2 import TrainType, ReserveOption
 from config.settings import settings
 from models import UserSession, UserProgress, UserCredentials, TrainSearchParams
 from storage.base import StorageInterface
-from services import TelegramService, KorailService, ReservationService, MessageTemplates
+from services import TelegramService, KorailService, SrtService, ReservationService, MessageTemplates
 from utils.validators import InputValidator
 from utils.logger import get_logger
 
@@ -61,6 +61,8 @@ class ConversationHandler:
         if progress == UserProgress.STARTED:
             self._handle_start_confirmation(chat_id, text, session)
         elif progress == UserProgress.START_ACCEPTED:
+            self._handle_provider_input(chat_id, text, session)
+        elif progress == UserProgress.PROVIDER_INPUT_SUCCESS:
             self._handle_phone_input(chat_id, text, session)
         elif progress == UserProgress.ID_INPUT_SUCCESS:
             self._handle_password_input(chat_id, text, session)
@@ -103,7 +105,8 @@ class ConversationHandler:
         if is_yes is True:
             session.last_action = UserProgress.START_ACCEPTED
             self.storage.save_user_session(session)
-            self.telegram.send_message(chat_id, MessageTemplates.request_phone_number())
+            from telegramBot.messages import Messages
+            self.telegram.send_message(chat_id, Messages.REQUEST_PROVIDER)
         elif is_yes is False:
             session.reset()
             self.storage.save_user_session(session)
@@ -111,6 +114,17 @@ class ConversationHandler:
             self.telegram.send_message(chat_id, Messages.CANCEL_START_CONFIRMATION)
         else:
             self.telegram.send_message(chat_id, error)
+
+    def _handle_provider_input(self, chat_id: int, text: str, session: UserSession) -> None:
+        """Handle KTX/SRT provider selection."""
+        if text not in ("1", "2"):
+            self.telegram.send_message(chat_id, "1(KTX) 또는 2(SRT)를 입력해 주세요.")
+            return
+
+        session.train_info["provider"] = "KTX" if text == "1" else "SRT"
+        session.last_action = UserProgress.PROVIDER_INPUT_SUCCESS
+        self.storage.save_user_session(session)
+        self.telegram.send_message(chat_id, MessageTemplates.request_phone_number())
 
     def _handle_admin_login(self, chat_id: int, session: UserSession) -> None:
         """Handle magic admin login."""
@@ -125,8 +139,9 @@ class ConversationHandler:
             return
 
         # Try login
-        korail = KorailService()
-        if korail.login(username, password):
+        provider = session.train_info.get("provider", "KTX")
+        train_service = SrtService() if provider == "SRT" else KorailService()
+        if train_service.login(username, password):
             session.credentials = UserCredentials(korail_id=username, korail_pw=password)
             session.last_action = UserProgress.PW_INPUT_SUCCESS
             self.storage.save_user_session(session)
@@ -184,9 +199,10 @@ class ConversationHandler:
         session.credentials.korail_pw = password
         self.storage.save_user_session(session)
 
-        # Try login
-        korail = KorailService()
-        if korail.login(username, password):
+        # Try login against the selected rail provider.
+        provider = session.train_info.get("provider", "KTX")
+        train_service = SrtService() if provider == "SRT" else KorailService()
+        if train_service.login(username, password):
             session.last_action = UserProgress.PW_INPUT_SUCCESS
             self.storage.save_user_session(session)
             self.telegram.send_message(chat_id, MessageTemplates.login_success())
@@ -270,7 +286,14 @@ class ConversationHandler:
         self.storage.save_user_session(session)
 
         from telegramBot.messages import Messages
-        self.telegram.send_message(chat_id, Messages.REQUEST_TRAIN_TYPE)
+        if session.train_info.get("provider", "KTX") == "SRT":
+            session.train_info['trainType'] = "SRT"
+            session.train_info['trainTypeShow'] = "SRT"
+            session.last_action = UserProgress.TRAIN_TYPE_INPUT_SUCCESS
+            self.storage.save_user_session(session)
+            self.telegram.send_message(chat_id, Messages.REQUEST_SEAT_TYPE)
+        else:
+            self.telegram.send_message(chat_id, Messages.REQUEST_TRAIN_TYPE)
 
     def _handle_train_type_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle train type selection."""
@@ -372,6 +395,7 @@ class ConversationHandler:
 
         from telegramBot.messages import Messages
         summary = Messages.CONFIRM_RESERVATION.format(
+            provider=session.train_info.get('provider', 'KTX'),
             depDate=session.train_info['depDate'],
             srcLocate=session.train_info['srcLocate'],
             dstLocate=session.train_info['dstLocate'],
@@ -404,6 +428,7 @@ class ConversationHandler:
         """Start the reservation background process."""
         # Create search params
         search_params = TrainSearchParams(
+            provider=session.train_info.get('provider', 'KTX'),
             dep_date=session.train_info['depDate'],
             src_locate=session.train_info['srcLocate'],
             dst_locate=session.train_info['dstLocate'],
@@ -441,6 +466,7 @@ class ConversationHandler:
         info = session.train_info
         from telegramBot.messages import Messages
         message = Messages.ALREADY_RUNNING.format(
+            provider=info.get('provider', 'KTX'),
             depDate=info.get('depDate', 'N/A'),
             srcLocate=info.get('srcLocate', 'N/A'),
             dstLocate=info.get('dstLocate', 'N/A'),

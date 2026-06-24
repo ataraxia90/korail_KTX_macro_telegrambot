@@ -73,11 +73,15 @@ class PaymentReminderService:
 
         # Start reminder loop in background thread (non-blocking)
         thread = threading.Thread(
-            target=self._reminder_loop,
+            target=self._send_reminder_loop,
             args=(chat_id,),
             daemon=True
         )
         thread.start()
+
+    def _send_reminder_loop(self, chat_id: int) -> None:
+        """Backward-compatible wrapper for the reminder loop."""
+        self._reminder_loop(chat_id)
 
     def _reminder_loop(self, chat_id: int) -> None:
         """
@@ -166,6 +170,11 @@ class PaymentReminderService:
                 reminder_active=False
             )
             self.storage.save_payment_status(payment_status)
+        self._send_completion_message(chat_id)
+
+    def deactivate_reminders(self, chat_id: int) -> None:
+        """Public wrapper for deactivating reminders."""
+        self._deactivate_reminder(chat_id)
 
     def _send_reminder(self, chat_id: int, minutes: int, seconds: int) -> None:
         """Send a payment reminder message."""

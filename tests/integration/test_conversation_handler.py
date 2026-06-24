@@ -30,6 +30,23 @@ class TestConversationHandler:
         """Clean up after each test."""
         self.storage.redis.flushdb()
 
+    def _complete_train_info(self, **overrides):
+        """Return train_info with all fields needed for final confirmation."""
+        info = {
+            'provider': 'KTX',
+            'depDate': '20991231',
+            'srcLocate': '서울',
+            'dstLocate': '부산',
+            'depTime': '090000',
+            'maxDepTime': '1800',
+            'trainType': 'TrainType.KTX',
+            'trainTypeShow': 'KTX',
+            'specialInfo': 'ReserveOption.GENERAL_FIRST',
+            'specialInfoShow': 'GENERAL_FIRST',
+        }
+        info.update(overrides)
+        return info
+
     def test_start_confirmation_yes(self):
         """Test start confirmation with 'Y'."""
         chat_id = 12345
@@ -46,7 +63,24 @@ class TestConversationHandler:
         assert updated_session.last_action == UserProgress.START_ACCEPTED
         self.telegram.send_message.assert_called_once()
         call_args = self.telegram.send_message.call_args
-        assert "전화번호" in call_args[0][1] or "휴대폰" in call_args[0][1]
+        assert "KTX" in call_args[0][1] and "SRT" in call_args[0][1]
+
+    def test_provider_selection_srt(self):
+        """Test selecting SRT provider."""
+        chat_id = 12345
+        session = UserSession(
+            chat_id=chat_id,
+            in_progress=True,
+            last_action=UserProgress.START_ACCEPTED
+        )
+        self.storage.save_user_session(session)
+
+        self.handler.handle_message(chat_id, "2")
+
+        updated_session = self.storage.get_user_session(chat_id)
+        assert updated_session.last_action == UserProgress.PROVIDER_INPUT_SUCCESS
+        assert updated_session.train_info["provider"] == "SRT"
+        self.telegram.send_message.assert_called_once()
 
     def test_start_confirmation_no(self):
         """Test start confirmation with 'N'."""
@@ -71,7 +105,7 @@ class TestConversationHandler:
         session = UserSession(
             chat_id=chat_id,
             in_progress=True,
-            last_action=UserProgress.START_ACCEPTED
+            last_action=UserProgress.PROVIDER_INPUT_SUCCESS
         )
         self.storage.save_user_session(session)
 
@@ -92,7 +126,7 @@ class TestConversationHandler:
         session = UserSession(
             chat_id=chat_id,
             in_progress=True,
-            last_action=UserProgress.START_ACCEPTED
+            last_action=UserProgress.PROVIDER_INPUT_SUCCESS
         )
         self.storage.save_user_session(session)
 
@@ -100,7 +134,7 @@ class TestConversationHandler:
 
         updated_session = self.storage.get_user_session(chat_id)
         # Should stay in same state
-        assert updated_session.last_action == UserProgress.START_ACCEPTED
+        assert updated_session.last_action == UserProgress.PROVIDER_INPUT_SUCCESS
         self.telegram.send_message.assert_called_once()
         call_args = self.telegram.send_message.call_args
         assert "다시" in call_args[0][1] or "하이픈" in call_args[0][1]
@@ -111,7 +145,7 @@ class TestConversationHandler:
         session = UserSession(
             chat_id=chat_id,
             in_progress=True,
-            last_action=UserProgress.START_ACCEPTED
+            last_action=UserProgress.PROVIDER_INPUT_SUCCESS
         )
         self.storage.save_user_session(session)
 
@@ -261,6 +295,23 @@ class TestConversationHandler:
         assert updated_session.last_action == UserProgress.TRAIN_TYPE_INPUT_SUCCESS
         assert updated_session.train_info['trainType'] == "TrainType.KTX"
 
+    def test_srt_skips_train_type_selection(self):
+        """Test SRT skips KTX train type selection."""
+        chat_id = 12345
+        session = UserSession(
+            chat_id=chat_id,
+            in_progress=True,
+            last_action=UserProgress.DEP_TIME_INPUT_SUCCESS
+        )
+        session.train_info = {"provider": "SRT"}
+        self.storage.save_user_session(session)
+
+        self.handler.handle_message(chat_id, "1800")
+        updated_session = self.storage.get_user_session(chat_id)
+
+        assert updated_session.last_action == UserProgress.TRAIN_TYPE_INPUT_SUCCESS
+        assert updated_session.train_info["trainType"] == "SRT"
+
     def test_seat_option_selection(self):
         """Test seat option selection."""
         chat_id = 12345
@@ -284,6 +335,7 @@ class TestConversationHandler:
             in_progress=True,
             last_action=UserProgress.SPECIAL_INPUT_SUCCESS
         )
+        session.train_info = self._complete_train_info()
         self.storage.save_user_session(session)
 
         self.handler.handle_message(chat_id, "1")
@@ -300,6 +352,7 @@ class TestConversationHandler:
             in_progress=True,
             last_action=UserProgress.SPECIAL_INPUT_SUCCESS
         )
+        session.train_info = self._complete_train_info()
         self.storage.save_user_session(session)
 
         self.handler.handle_message(chat_id, "3")
@@ -317,7 +370,7 @@ class TestConversationHandler:
             in_progress=True,
             last_action=UserProgress.PASSENGER_COUNT_INPUT_SUCCESS
         )
-        session.train_info = {'passengerCount': 3}
+        session.train_info = self._complete_train_info(passengerCount=3)
         self.storage.save_user_session(session)
 
         # Select consecutive

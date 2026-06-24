@@ -64,6 +64,14 @@ class Messages:
 🔒 비밀번호를 입력해주세요.
 """
 
+    REQUEST_PROVIDER = """열차 서비스를 선택해 주세요.
+
+1. KTX
+2. SRT
+
+숫자 1 또는 2를 입력해 주세요.
+"""
+
     LOGIN_SUCCESS = """✅ 로그인 성공!
 
 📅 출발 희망일을 8자리로 입력해주세요.
@@ -177,6 +185,7 @@ class Messages:
 
 📋 예약 정보 확인
 ━━━━━━━━━━━━━━━━━━━━
+🚆 서비스: {provider}
 📅 출발일: {depDate}
 🚉 출발역: {srcLocate}
 🏁 도착역: {dstLocate}
@@ -206,6 +215,7 @@ class Messages:
 
 📋 진행 중인 예약 정보
 ━━━━━━━━━━━━━━━━━━━━
+🚆 서비스: {provider}
 📅 출발일: {depDate}
 🚉 출발역: {srcLocate}
 🏁 도착역: {dstLocate}

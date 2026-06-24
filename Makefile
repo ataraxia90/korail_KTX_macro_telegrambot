@@ -31,11 +31,11 @@ test:			## Run all tests with pytest
 
 .PHONY: test-api
 test-api:		## Run API endpoint tests only
-	pipenv run pytest tests/test_api.py -v
+	pipenv run pytest tests/integration/test_webhook.py -v
 
 .PHONY: test-logic
-test-logic:		## Run Korail logic tests only
-	pipenv run pytest tests/test_korail_logic.py -v
+test-logic:		## Run reservation logic tests only
+	pipenv run pytest tests/integration/test_reservation_service.py tests/unit/test_srt_service.py -v
 
 .PHONY: build
 build:			## Build Docker Image

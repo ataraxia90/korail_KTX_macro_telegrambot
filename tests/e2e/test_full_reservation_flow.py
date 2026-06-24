@@ -59,7 +59,13 @@ class TestFullReservationFlow:
         session = self.storage.get_user_session(chat_id)
         assert session.last_action == UserProgress.START_ACCEPTED
 
-        # Step 3: Enter phone number
+        # Step 3: Select provider (KTX)
+        self.conversation_handler.handle_message(chat_id, "1")
+        session = self.storage.get_user_session(chat_id)
+        assert session.last_action == UserProgress.PROVIDER_INPUT_SUCCESS
+        assert session.train_info['provider'] == "KTX"
+
+        # Step 4: Enter phone number
         with patch('config.settings.settings.is_user_allowed', return_value=True):
             self.conversation_handler.handle_message(chat_id, "010-1234-5678")
         session = self.storage.get_user_session(chat_id)
@@ -147,6 +153,7 @@ class TestFullReservationFlow:
         # Go through flow quickly
         self.command_handler.route_command(chat_id, "/start")
         self.conversation_handler.handle_message(chat_id, "Y")
+        self.conversation_handler.handle_message(chat_id, "1")
 
         with patch('config.settings.settings.is_user_allowed', return_value=True):
             self.conversation_handler.handle_message(chat_id, "010-1234-5678")
@@ -194,6 +201,7 @@ class TestFullReservationFlow:
         # Quick flow setup
         self.command_handler.route_command(chat_id, "/start")
         self.conversation_handler.handle_message(chat_id, "Y")
+        self.conversation_handler.handle_message(chat_id, "1")
 
         with patch('config.settings.settings.is_user_allowed', return_value=True):
             self.conversation_handler.handle_message(chat_id, "010-1234-5678")
@@ -234,6 +242,7 @@ class TestFullReservationFlow:
         # Start flow
         self.command_handler.route_command(chat_id, "/start")
         self.conversation_handler.handle_message(chat_id, "Y")
+        self.conversation_handler.handle_message(chat_id, "1")
 
         with patch('config.settings.settings.is_user_allowed', return_value=True):
             self.conversation_handler.handle_message(chat_id, "010-1234-5678")
@@ -260,6 +269,7 @@ class TestFullReservationFlow:
         # Start flow
         self.command_handler.route_command(chat_id, "/start")
         self.conversation_handler.handle_message(chat_id, "Y")
+        self.conversation_handler.handle_message(chat_id, "1")
 
         with patch('config.settings.settings.is_user_allowed', return_value=True):
             self.conversation_handler.handle_message(chat_id, "010-1234-5678")
@@ -313,6 +323,7 @@ class TestFullReservationFlow:
             'dstLocate': '부산',
             'depTime': '090000',
             'maxDepTime': '1800',
+            'provider': 'KTX',
             'trainType': 'TrainType.KTX',
             'trainTypeShow': 'KTX',
             'specialInfo': 'ReserveOption.GENERAL_FIRST',

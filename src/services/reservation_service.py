@@ -60,6 +60,11 @@ class ReservationService:
             True if process started successfully
         """
         try:
+            existing = self.storage.get_running_reservation(chat_id)
+            if existing:
+                self.telegram.send_message(chat_id, "이미 진행 중인 예약이 있습니다. /cancel 후 다시 시도해 주세요.")
+                return False
+
             # Prepare subprocess arguments
             arguments = [
                 username,
@@ -77,7 +82,12 @@ class ReservationService:
             ]
 
             # Start background process
-            cmd = ['python', '-m', 'telegramBot.telebotBackProcess'] + arguments
+            module_name = (
+                'telegramBot.srtBackProcess'
+                if search_params.provider.upper() == "SRT"
+                else 'telegramBot.telebotBackProcess'
+            )
+            cmd = ['python', '-m', module_name] + arguments
             proc = subprocess.Popen(cmd)
 
             logger.info(
@@ -126,6 +136,7 @@ class ReservationService:
             reservation = self.storage.get_running_reservation(chat_id)
             if not reservation:
                 logger.warning(f"No running reservation found for chat_id={chat_id}")
+                self.telegram.send_message(chat_id, "진행 중인 예약이 없습니다.")
                 return False
 
             # Kill process
@@ -133,8 +144,8 @@ class ReservationService:
                 if reservation.process_id != 9999999:
                     os.kill(reservation.process_id, signal.SIGTERM)
                     logger.info(f"Killed process {reservation.process_id}")
-            except ProcessLookupError:
-                logger.warning(f"Process {reservation.process_id} not found")
+            except (ProcessLookupError, OSError) as e:
+                logger.warning(f"Process {reservation.process_id} could not be killed: {e}")
 
             # Clean up storage
             self.storage.delete_running_reservation(chat_id)
@@ -215,15 +226,25 @@ class ReservationService:
         """
         reservations = self.storage.get_all_running_reservations()
         count = len(reservations)
-        korail_ids = [r.korail_id for r in reservations]
+        if count == 0:
+            return "진행 중인 예약이 없습니다."
 
-        return f"총 {count}개의 예약이 실행중입니다. 이용중인 사용자 : {korail_ids}"
+        details = [
+            (
+                f"{r.search_params.provider.upper()} {r.korail_id}: "
+                f"{r.search_params.src_locate}->{r.search_params.dst_locate} "
+                f"{r.search_params.dep_date} {r.search_params.dep_time[:4]}"
+            )
+            for r in reservations
+        ]
+
+        return f"총 {count}개의 예약이 실행중입니다. 이용중인 예약: {details}"
 
     def _notify_subscribers_start(self, username: str, params: TrainSearchParams) -> None:
         """Notify subscribers about reservation start."""
         subscribers = self.storage.get_all_subscribers()
         message = (
-            f"{username}의 {params.src_locate}에서 {params.dst_locate}로 "
+            f"[{params.provider.upper()}] {username}의 {params.src_locate}에서 {params.dst_locate}로 "
             f"{params.dep_date}에 출발하는 열차 예약이 시작되었습니다."
         )
         self.telegram.send_to_multiple(subscribers, message)

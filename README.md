@@ -1,5 +1,29 @@
 # 코레일 KTX 예매 텔레그램 챗봇
 
+## SRT 사용법
+
+이 봇은 기존 KTX/Korail 예약 흐름과 SRT 예약 흐름을 함께 지원합니다. `/start` 이후 열차 서비스 선택 단계에서 `1`은 KTX, `2`는 SRT입니다.
+
+- SRT는 `SRTrain` 패키지의 `SRT`, `SeatType`, `Adult`를 사용합니다.
+- SRT를 선택하면 KTX train type 선택 단계는 건너뛰고 좌석 옵션 선택으로 이동합니다.
+- 좌석 옵션은 SRTrain `SeatType`으로 매핑됩니다. 일반실 옵션은 일반석, 특실 옵션은 특실로 처리합니다.
+- 테스트에서는 실제 SRT 서버 호출을 mock 처리해야 합니다.
+
+Render/Docker 환경변수:
+
+```env
+SRT_USERID=your_srt_id_here
+SRT_USERPW=your_srt_password_here
+SRT_SEARCH_INTERVAL=1
+SRT_PAYMENT_URL=https://etk.srail.kr/
+```
+
+제한사항:
+
+- SRT 결제는 자동 결제가 아니며 예약 성공 후 사용자가 직접 결제해야 합니다.
+- SRTrain 또는 SRT 사이트 변경에 따라 동작이 깨질 수 있습니다.
+- 과도하게 짧은 조회 간격은 계정 제한 또는 서비스 차단 위험이 있습니다.
+
 매진된 KTX 열차를 자동으로 모니터링하여 좌석이 나오면 예약해주는 텔레그램 봇입니다.
 
 ## 빠른 시작
@@ -81,7 +105,7 @@ python src/app.py
 - `make shell` - pipenv shell 진입
 - `make test` - 전체 테스트 실행
 - `make test-api` - API 엔드포인트 테스트만 실행
-- `make test-logic` - Korail 로직 테스트만 실행
+- `make test-logic` - 예약 로직 테스트만 실행
 - `make requirements` - requirements.txt 생성
 
 ### Docker 배포
@@ -130,20 +154,21 @@ make test
 # API 엔드포인트 테스트만 실행
 make test-api
 
-# Korail 로직 테스트만 실행
+# 예약 로직 테스트만 실행
 make test-logic
 ```
 
 **테스트 구성:**
-- `tests/test_api.py` - Flask API 엔드포인트 테스트
+- `tests/integration/test_webhook.py` - Flask API 엔드포인트 테스트
   - `/telebot` 엔드포인트 존재 확인
   - `/check_payment` 엔드포인트 존재 확인
   - CORS 헤더 확인
   - 404 에러 처리 확인
 
-- `tests/test_korail_logic.py` - Korail 예약 로직 테스트
+- `tests/integration/test_reservation_service.py`, `tests/unit/test_srt_service.py` - 예약 로직 테스트
   - korail2 라이브러리 import 확인
   - 필수 클래스 (Korail, TrainType, ReserveOption) 확인
+  - SRT 서비스 mock 기반 검색/예약 확인
   - Flask 및 Telegram Bot 의존성 확인
   - 결제 리마인더 시간 설정 (10분, 2분 간격) 확인
 

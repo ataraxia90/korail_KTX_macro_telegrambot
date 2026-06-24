@@ -12,6 +12,7 @@ class TrainSearchParams:
     src_locate: str  # Station name (without '역')
     dst_locate: str  # Station name (without '역')
     dep_time: str  # Format: HHMMSS
+    provider: str = "KTX"  # "KTX" or "SRT"
     max_dep_time: str = "2400"  # Format: HHMM
     train_type: str = "TrainType.KTX"  # korail2.TrainType enum as string
     train_type_display: str = "KTX"
@@ -27,6 +28,9 @@ class TrainSearchParams:
         Returns:
             Tuple of (is_valid, error_message)
         """
+        if self.provider.upper() not in ("KTX", "SRT"):
+            return False, "provider must be KTX or SRT"
+
         # Validate date format
         if not self.dep_date.isdigit() or len(self.dep_date) != 8:
             return False, "날짜 형식이 올바르지 않습니다 (YYYYMMDD)"
@@ -48,8 +52,8 @@ class RunningReservation:
     """Information about a running reservation process."""
     chat_id: int
     process_id: int
-    korail_id: str
     search_params: TrainSearchParams
+    korail_id: str = ""
     started_at: datetime = datetime.now()
 
 
@@ -60,6 +64,19 @@ class PaymentStatus:
     completed: bool = False
     reservation_time: Optional[datetime] = None
     reminder_active: bool = False
+
+    def __post_init__(self) -> None:
+        if self.reservation_time is None:
+            self.reservation_time = datetime.now()
+
+    @property
+    def created_at(self) -> Optional[datetime]:
+        """Backward-compatible alias for reservation_time."""
+        return self.reservation_time
+
+    @created_at.setter
+    def created_at(self, value: Optional[datetime]) -> None:
+        self.reservation_time = value
 
 
 class ReservationPaymentStatus(Enum):

@@ -22,6 +22,12 @@ class Settings:
     KORAIL_STATION_LIST_URL: str = "http://www.letskorail.com/ebizprd/stationKtxList.do"
     KORAIL_PAYMENT_URL: str = "https://www.letskorail.com/ebizprd/EbizPrdTicketpr13500W_pr13510.do?"
 
+    # SRT Configuration
+    SRT_USERID: Optional[str] = os.environ.get('SRT_USERID')
+    SRT_USERPW: Optional[str] = os.environ.get('SRT_USERPW')
+    SRT_SEARCH_INTERVAL: int = int(os.environ.get('SRT_SEARCH_INTERVAL', os.environ.get('SEARCH_INTERVAL', '1')))
+    SRT_PAYMENT_URL: str = os.environ.get('SRT_PAYMENT_URL', 'https://etk.srail.kr/')
+
     # User Access Control
     ALLOW_LIST: list[str] = os.environ.get('ALLOW_LIST', '').split(',') if os.environ.get('ALLOW_LIST') else []
 

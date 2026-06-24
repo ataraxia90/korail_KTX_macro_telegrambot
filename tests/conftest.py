@@ -12,9 +12,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 _redis_container = None
 
 
+def _is_unit_only_run(config) -> bool:
+    """Return True when pytest was invoked only for unit-test paths."""
+    args = [str(arg).replace("\\", "/") for arg in config.args]
+    return bool(args) and all(arg.startswith("tests/unit") for arg in args)
+
+
 def pytest_configure(config):
     """Set up Redis container before test collection."""
     global _redis_container
+    if _is_unit_only_run(config):
+        return
+
     _redis_container = RedisContainer("redis:7-alpine")
     _redis_container.start()
 
