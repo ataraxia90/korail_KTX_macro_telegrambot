@@ -40,13 +40,13 @@ api = Api(application)
 # Initialize storage (Redis)
 try:
     storage = RedisStorage()
-    logger.info("✅ Redis storage initialized successfully")
+    logger.info("Redis storage initialized successfully")
     # Restore debug mode from Redis
     if storage.is_debug_mode():
         LoggerFactory.set_log_level("DEBUG")
         logger.info("Debug mode restored from Redis - log level set to DEBUG")
 except Exception as e:
-    logger.error(f"❌ Failed to initialize Redis storage: {e}")
+    logger.error(f"Failed to initialize Redis storage: {e}")
     logger.error("Please ensure Redis is running and accessible")
     sys.exit(1)
 
