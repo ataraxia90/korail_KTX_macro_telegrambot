@@ -1,4 +1,5 @@
 """SRT API service wrapper."""
+import re
 import time
 from typing import Optional, List, Any
 
@@ -81,13 +82,7 @@ class SrtService:
             logger.error(f"SRT search error: {e}", exc_info=verbose)
             return []
 
-        trains = trains or []
-        if max_dep_time != "2400":
-            max_time = int(max_dep_time)
-            trains = [
-                train for train in trains
-                if 0 < self._extract_departure_time(train) < max_time
-            ]
+        trains = self._filter_trains(trains or [], dep_date, max_dep_time)
 
         return trains
 
@@ -185,6 +180,44 @@ class SrtService:
             return int("".join(time_part.split(":"))[:4])
         except (IndexError, ValueError):
             return 0
+
+    def _filter_trains(self, trains: List, dep_date: str, max_dep_time: str) -> List:
+        requested_date = dep_date[:8]
+        max_time = int(max_dep_time) if max_dep_time != "2400" else None
+        filtered = []
+
+        for train in trains:
+            train_date = self._extract_departure_date(train, requested_date)
+            if train_date and train_date != requested_date:
+                logger.debug(f"Filtered SRT train outside requested date: {train}")
+                continue
+
+            if max_time is not None:
+                train_time = self._extract_departure_time(train)
+                if not (0 < train_time < max_time):
+                    continue
+
+            filtered.append(train)
+
+        return filtered
+
+    def _extract_departure_date(self, train, requested_date: str) -> Optional[str]:
+        for attr in ("dep_date", "departure_date", "date", "depDate"):
+            value = getattr(train, attr, None)
+            if value:
+                digits = "".join(ch for ch in str(value) if ch.isdigit())
+                if len(digits) >= 8:
+                    return digits[:8]
+                if len(digits) == 4:
+                    return f"{requested_date[:4]}{digits}"
+
+        match = re.search(r"(\d{1,2})월\s*(\d{1,2})일", str(train))
+        if match:
+            month = int(match.group(1))
+            day = int(match.group(2))
+            return f"{requested_date[:4]}{month:02d}{day:02d}"
+
+        return None
 
     @property
     def is_logged_in(self) -> bool:

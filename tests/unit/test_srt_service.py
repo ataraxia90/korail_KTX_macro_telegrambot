@@ -38,6 +38,24 @@ class FakeSRT:
         return f"reserved:{train.name}:{special_seat}:{passengers[0].count}"
 
 
+class FakeStringTrain:
+    def __init__(self, dep_time, text, name):
+        self.dep_time = dep_time
+        self.name = name
+        self._text = text
+
+    def __str__(self):
+        return self._text
+
+
+class FakeSRTWithOvernightResult(FakeSRT):
+    def search_train(self, src, dst, date, time):
+        return [
+            FakeStringTrain("000600", "[SRT] 07월 02일, 대전~수서(00:06~01:06)", "next-day"),
+            SimpleNamespace(dep_date="20260701", dep_time="082500", name="same-day"),
+        ]
+
+
 def test_srt_login_success_and_failure():
     service = SrtService(srt_cls=FakeSRT, seat_type_cls=FakeSeatType, adult_cls=FakeAdult)
 
@@ -68,6 +86,15 @@ def test_srt_search_filters_by_max_departure_time():
 
     assert len(trains) == 1
     assert trains[0].name.startswith("Suseo-Busan")
+
+
+def test_srt_search_filters_out_next_day_overnight_trains():
+    service = SrtService(srt_cls=FakeSRTWithOvernightResult, seat_type_cls=FakeSeatType, adult_cls=FakeAdult)
+    service.login("user", "ok")
+
+    trains = service.search_trains("20260701", "대전", "수서", "082500", "0830")
+
+    assert [train.name for train in trains] == ["same-day"]
 
 
 def test_srt_search_and_reserve_loop_uses_seat_type_and_passengers():
