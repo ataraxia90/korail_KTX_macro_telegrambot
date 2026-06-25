@@ -1,4 +1,5 @@
 """Korail API service wrapper."""
+import re
 import time
 from typing import Optional, List
 from korail2 import (
@@ -157,6 +158,8 @@ class KorailService:
                             logger.debug(f"    General seats: {train.general_seat}")
                         if hasattr(train, 'special_seat'):
                             logger.debug(f"    Special seats: {train.special_seat}")
+
+            trains = self._filter_trains_by_date(trains or [], dep_date, verbose)
 
             # Filter by max departure time
             if trains and max_dep_time != "2400":
@@ -528,6 +531,38 @@ class KorailService:
         except (IndexError, ValueError) as e:
             logger.error(f"Failed to extract departure time from train: {train}, error: {e}")
             return 0
+
+    def _filter_trains_by_date(self, trains: List, dep_date: str, verbose: bool = True) -> List:
+        requested_date = dep_date[:8]
+        filtered_trains = []
+
+        for train in trains:
+            train_date = self._extract_departure_date(train, requested_date)
+            if train_date and train_date != requested_date:
+                if verbose:
+                    logger.debug(f"Filtered out by date: {train_date} != {requested_date}")
+                continue
+            filtered_trains.append(train)
+
+        return filtered_trains
+
+    def _extract_departure_date(self, train, requested_date: str) -> Optional[str]:
+        for attr in ("dep_date", "departure_date", "date", "depDate"):
+            value = getattr(train, attr, None)
+            if value:
+                digits = "".join(ch for ch in str(value) if ch.isdigit())
+                if len(digits) >= 8:
+                    return digits[:8]
+                if len(digits) == 4:
+                    return f"{requested_date[:4]}{digits}"
+
+        match = re.search(r"(\d{1,2})월\s*(\d{1,2})일", str(train))
+        if match:
+            month = int(match.group(1))
+            day = int(match.group(2))
+            return f"{requested_date[:4]}{month:02d}{day:02d}"
+
+        return None
 
     @property
     def is_logged_in(self) -> bool:
