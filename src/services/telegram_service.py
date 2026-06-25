@@ -44,7 +44,10 @@ class TelegramService:
             logger.info(f"Message sent to chat_id={chat_id}")
             return True
         except Exception as e:
-            logger.error(f"Failed to send message to chat_id={chat_id}: {e}")
+            logger.error(
+                f"Failed to send message to chat_id={chat_id}: "
+                f"{type(e).__name__}: {getattr(e, 'strerror', None) or 'request failed'}"
+            )
             return False
 
     def send_to_multiple(self, chat_ids: list[int], text: str) -> int:

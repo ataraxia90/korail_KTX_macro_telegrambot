@@ -5,6 +5,7 @@ Tests process management, cancellation, and state management.
 """
 import pytest
 import time
+import sys
 from unittest.mock import Mock, patch
 
 from storage import RedisStorage
@@ -104,7 +105,8 @@ class TestReservationService:
 
         assert success is True
         cmd = mock_popen.call_args[0][0]
-        assert cmd[:3] == ['python', '-m', 'telegramBot.srtBackProcess']
+        assert cmd[:3] == [sys.executable, '-m', 'telegramBot.srtBackProcess']
+        assert mock_popen.call_args.kwargs["cwd"].endswith("src")
 
         running = self.storage.get_running_reservation(chat_id)
         assert running.search_params.provider == "SRT"

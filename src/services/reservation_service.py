@@ -2,6 +2,7 @@
 import subprocess
 import signal
 import os
+import sys
 from typing import Optional
 from korail2 import TrainType, ReserveOption
 
@@ -87,8 +88,11 @@ class ReservationService:
                 if search_params.provider.upper() == "SRT"
                 else 'telegramBot.telebotBackProcess'
             )
-            cmd = ['python', '-m', module_name] + arguments
-            proc = subprocess.Popen(cmd)
+            src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            proc = subprocess.Popen(
+                [sys.executable, '-m', module_name] + arguments,
+                cwd=src_dir
+            )
 
             logger.info(
                 f"Started reservation process for chat_id={chat_id}, pid={proc.pid}"
