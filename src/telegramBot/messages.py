@@ -9,14 +9,14 @@ class Messages:
     """봇 메시지 템플릿 클래스"""
 
     # ========== 시작 및 안내 메시지 ==========
-    WELCOME = """🚄 근삼 코레일 봇을 이용해 주셔서 감사합니다.
+    WELCOME = """🚄 기차 예매 봇을 이용해 주셔서 감사합니다.
 
 본 프로그램은 매진 열차 자동 예약을 위한 서비스입니다.
 예약 완료 시 결제는 10분 이내에 직접 진행해주셔야 합니다.
 
 📋 예약 정보 입력 순서
 ━━━━━━━━━━━━━━━━
-  1. 코레일 로그인 정보
+  1. 로그인 정보
   2. 출발 희망일
   3. 출발역
   4. 도착역
@@ -49,6 +49,17 @@ class Messages:
 
     # ========== 로그인 관련 메시지 ==========
     REQUEST_PHONE = """📱 코레일 로그인 정보 입력을 시작합니다.
+
+현재 휴대폰 번호 로그인만 지원됩니다.
+
+휴대전화번호를 입력해 주세요.
+예시: 010-1234-5678
+
+⚠️ 하이픈(-)을 반드시 포함하여 입력해주세요.
+💡 취소를 원하시면 /cancel을 입력하세요.
+"""
+
+    REQUEST_SRT_PHONE = """📱 SRT 로그인 정보 입력을 시작합니다.
 
 현재 휴대폰 번호 로그인만 지원됩니다.
 
@@ -94,6 +105,22 @@ class Messages:
 ⚠️ 주의: 5회 이상 로그인 실패 시 코레일 홈페이지에서 비밀번호를 재설정해야 합니다.
 """
 
+    SRT_LOGIN_FAILED_RETRY = """❌ 로그인 실패
+
+입력하신 정보:
+━━━━━━━━━━━━━━
+아이디: {username}
+비밀번호: 보안상 비공개
+━━━━━━━━━━━━━━
+
+다음 중 하나를 선택해주세요:
+  • Y 또는 예 → 계정정보 다시 입력
+  • N 또는 아니오 → 작업 취소
+  • 비밀번호만 다시 입력 → 같은 아이디로 재시도
+
+⚠️ 주의: 5회 이상 로그인 실패 시 SRT 홈페이지 또는 앱에서 비밀번호를 재설정해야 합니다.
+"""
+
     # ========== 예약 정보 입력 메시지 ==========
     REQUEST_DATE = """✅ 출발일 입력 완료
 
@@ -104,6 +131,14 @@ class Messages:
 📍 역 목록: http://www.letskorail.com/ebizprd/stationKtxList.do
 """
 
+    REQUEST_SRT_DATE = """✅ 출발일 입력 완료
+
+🚉 출발역을 입력해주세요.
+예시: 수서, 동탄, 평택지제, 대전, 동대구, 부산 등
+
+💡 역 이름만 입력 ('역' 제외)
+"""
+
     REQUEST_SRC_STATION = """✅ 출발역 입력 완료
 
 🏁 도착역을 입력해주세요.
@@ -111,6 +146,14 @@ class Messages:
 
 💡 역 이름만 입력 ('역' 제외)
 📍 역 목록: http://www.letskorail.com/ebizprd/stationKtxList.do
+"""
+
+    REQUEST_SRT_SRC_STATION = """✅ 출발역 입력 완료
+
+🏁 도착역을 입력해주세요.
+예시: 대전, 동대구, 부산, 광주송정, 목포 등
+
+💡 역 이름만 입력 ('역' 제외)
 """
 
     REQUEST_DST_STATION = """✅ 도착역 입력 완료
@@ -142,6 +185,18 @@ class Messages:
 """
 
     REQUEST_SEAT_TYPE = """✅ 열차 종류 선택 완료
+
+💺 좌석 종류를 선택해주세요.
+
+1️⃣ 일반실 우선
+2️⃣ 일반실만
+3️⃣ 특실 우선
+4️⃣ 특실만
+
+숫자를 입력하세요: 1, 2, 3, 4
+"""
+
+    REQUEST_SRT_SEAT_TYPE = """✅ 시간 입력 완료
 
 💺 좌석 종류를 선택해주세요.
 
@@ -276,7 +331,7 @@ class Messages:
 예약 후 10분이 경과하여 리마인더가 자동 종료되었습니다.
 결제를 완료하지 않으셨다면 예약이 취소되었을 수 있습니다.
 
-💡 코레일 사이트에서 예약 상태를 확인해주세요.
+💡 예매 사이트에서 예약 상태를 확인해주세요.
 """
 
     # ========== 관리자 메시지 ==========
@@ -293,8 +348,10 @@ class Messages:
         return Messages.WELCOME
 
     @staticmethod
-    def request_phone_number():
+    def request_phone_number(provider: str = "KTX"):
         """Request phone number (compatibility method)"""
+        if provider.upper() == "SRT":
+            return Messages.REQUEST_SRT_PHONE
         return Messages.REQUEST_PHONE
 
     @staticmethod
@@ -308,19 +365,32 @@ class Messages:
         return Messages.LOGIN_SUCCESS
 
     @staticmethod
-    def login_failure(username: str):
+    def login_failure(username: str, provider: str = "KTX"):
         """Login failure (compatibility method)"""
+        if provider.upper() == "SRT":
+            return Messages.SRT_LOGIN_FAILED_RETRY.format(username=username)
         return Messages.LOGIN_FAILED_RETRY.format(username=username)
 
     @staticmethod
-    def request_departure_station():
+    def request_departure_station(provider: str = "KTX"):
         """Request departure station after date input (compatibility method)"""
+        if provider.upper() == "SRT":
+            return Messages.REQUEST_SRT_DATE
         return Messages.REQUEST_DATE
 
     @staticmethod
-    def request_arrival_station():
+    def request_arrival_station(provider: str = "KTX"):
         """Request arrival station after departure station input (compatibility method)"""
+        if provider.upper() == "SRT":
+            return Messages.REQUEST_SRT_SRC_STATION
         return Messages.REQUEST_SRC_STATION
+
+    @staticmethod
+    def request_seat_type(provider: str = "KTX"):
+        """Request seat type after train/time selection."""
+        if provider.upper() == "SRT":
+            return Messages.REQUEST_SRT_SEAT_TYPE
+        return Messages.REQUEST_SEAT_TYPE
 
     @staticmethod
     def not_in_allow_list():

@@ -124,12 +124,20 @@ class ConversationHandler:
         session.train_info["provider"] = "KTX" if text == "1" else "SRT"
         session.last_action = UserProgress.PROVIDER_INPUT_SUCCESS
         self.storage.save_user_session(session)
-        self.telegram.send_message(chat_id, MessageTemplates.request_phone_number())
+        self.telegram.send_message(
+            chat_id,
+            MessageTemplates.request_phone_number(session.train_info["provider"])
+        )
 
     def _handle_admin_login(self, chat_id: int, session: UserSession) -> None:
         """Handle magic admin login."""
-        username = settings.KORAIL_ADMIN_USER_ID
-        password = settings.KORAIL_ADMIN_PASSWORD
+        provider = session.train_info.get("provider", "KTX")
+        if provider == "SRT":
+            username = settings.SRT_USERID
+            password = settings.SRT_USERPW
+        else:
+            username = settings.KORAIL_ADMIN_USER_ID
+            password = settings.KORAIL_ADMIN_PASSWORD
 
         if not username or not password:
             session.reset()
@@ -139,7 +147,6 @@ class ConversationHandler:
             return
 
         # Try login
-        provider = session.train_info.get("provider", "KTX")
         train_service = SrtService() if provider == "SRT" else KorailService()
         if train_service.login(username, password):
             session.credentials = UserCredentials(korail_id=username, korail_pw=password)
@@ -154,6 +161,10 @@ class ConversationHandler:
 
     def _handle_phone_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle phone number input."""
+        if text == settings.ADMIN_MAGIC_STRING:
+            self._handle_admin_login(chat_id, session)
+            return
+
         is_valid, error = InputValidator.validate_phone_number(text)
 
         if not is_valid:
@@ -208,7 +219,7 @@ class ConversationHandler:
             self.telegram.send_message(chat_id, MessageTemplates.login_success())
         else:
             # Login failed - ask for retry
-            self.telegram.send_message(chat_id, MessageTemplates.login_failure(username))
+            self.telegram.send_message(chat_id, MessageTemplates.login_failure(username, provider))
             # Don't change state - wait for retry input
 
     def _handle_date_input(self, chat_id: int, text: str, session: UserSession) -> None:
@@ -225,7 +236,10 @@ class ConversationHandler:
         session.train_info['depDate'] = text
         session.last_action = UserProgress.DATE_INPUT_SUCCESS
         self.storage.save_user_session(session)
-        self.telegram.send_message(chat_id, MessageTemplates.request_departure_station())
+        self.telegram.send_message(
+            chat_id,
+            MessageTemplates.request_departure_station(session.train_info.get("provider", "KTX"))
+        )
 
     def _handle_src_station_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle source station input."""
@@ -238,7 +252,10 @@ class ConversationHandler:
         session.train_info['srcLocate'] = text
         session.last_action = UserProgress.SRC_LOCATE_INPUT_SUCCESS
         self.storage.save_user_session(session)
-        self.telegram.send_message(chat_id, MessageTemplates.request_arrival_station())
+        self.telegram.send_message(
+            chat_id,
+            MessageTemplates.request_arrival_station(session.train_info.get("provider", "KTX"))
+        )
 
     def _handle_dst_station_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle destination station input."""
@@ -291,7 +308,7 @@ class ConversationHandler:
             session.train_info['trainTypeShow'] = "SRT"
             session.last_action = UserProgress.TRAIN_TYPE_INPUT_SUCCESS
             self.storage.save_user_session(session)
-            self.telegram.send_message(chat_id, Messages.REQUEST_SEAT_TYPE)
+            self.telegram.send_message(chat_id, Messages.request_seat_type("SRT"))
         else:
             self.telegram.send_message(chat_id, Messages.REQUEST_TRAIN_TYPE)
 
@@ -314,7 +331,10 @@ class ConversationHandler:
         self.storage.save_user_session(session)
 
         from telegramBot.messages import Messages
-        self.telegram.send_message(chat_id, Messages.REQUEST_SEAT_TYPE)
+        self.telegram.send_message(
+            chat_id,
+            Messages.request_seat_type(session.train_info.get("provider", "KTX"))
+        )
 
     def _handle_special_option_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle special seat option selection."""

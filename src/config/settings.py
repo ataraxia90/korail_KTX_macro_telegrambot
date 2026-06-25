@@ -37,7 +37,7 @@ class Settings:
 
     # Flask Configuration
     FLASK_HOST: str = os.environ.get('FLASK_HOST', '0.0.0.0')
-    FLASK_PORT: int = int(os.environ.get('FLASK_PORT', '8080'))
+    FLASK_PORT: int = int(os.environ.get('FLASK_PORT', os.environ.get('PORT', '8080')))
     FLASK_DEBUG: bool = os.environ.get('FLASK_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
     # Application Callback URLs (internal)
@@ -58,6 +58,7 @@ class Settings:
     RECURSION_LIMIT: int = 10**7
 
     # Redis Configuration
+    REDIS_URL: Optional[str] = os.environ.get('REDIS_URL')
     REDIS_HOST: str = os.environ.get('REDIS_HOST', 'localhost')
     REDIS_PORT: int = int(os.environ.get('REDIS_PORT', '6379'))
     REDIS_DB: int = int(os.environ.get('REDIS_DB', '0'))

@@ -1,4 +1,4 @@
-# 코레일 KTX 예매 텔레그램 챗봇
+# 기차 예매 텔레그램 챗봇
 
 ## SRT 사용법
 
@@ -12,10 +12,17 @@
 Render/Docker 환경변수:
 
 ```env
+BOTTOKEN=your_telegram_bot_token_here
+USERID=your_korail_id_here
+USERPW=your_korail_password_here
 SRT_USERID=your_srt_id_here
 SRT_USERPW=your_srt_password_here
 SRT_SEARCH_INTERVAL=1
 SRT_PAYMENT_URL=https://etk.srail.kr/
+ALLOW_LIST=010-1234-5678
+REDIS_URL=redis://...
+FLASK_HOST=0.0.0.0
+FLASK_DEBUG=False
 ```
 
 제한사항:
@@ -25,6 +32,27 @@ SRT_PAYMENT_URL=https://etk.srail.kr/
 - 과도하게 짧은 조회 간격은 계정 제한 또는 서비스 차단 위험이 있습니다.
 
 매진된 KTX 열차를 자동으로 모니터링하여 좌석이 나오면 예약해주는 텔레그램 봇입니다.
+
+## Render 배포
+
+이 저장소에는 `render.yaml` Blueprint가 포함되어 있습니다.
+
+1. 현재 브랜치(`srt-mvp`)를 GitHub에 push합니다.
+2. Render Dashboard에서 **New +** → **Blueprint**를 선택하고 이 저장소를 연결합니다.
+3. 생성될 Web Service의 비밀 환경변수를 입력합니다.
+   - `BOTTOKEN`
+   - `USERID`, `USERPW` (KTX 매직 로그인용)
+   - `SRT_USERID`, `SRT_USERPW` (SRT 매직 로그인용)
+   - `ALLOW_LIST` (비워두면 전체 허용)
+4. 배포가 끝나면 Web Service URL 뒤에 `/telebot`을 붙여 Telegram webhook으로 설정합니다.
+
+```bash
+curl -X POST "https://api.telegram.org/bot${BOTTOKEN}/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://your-render-service.onrender.com/telebot\",\"drop_pending_updates\":true}"
+```
+
+Render에서는 `PORT`와 `REDIS_URL`을 자동으로 주입받을 수 있도록 코드가 처리합니다.
 
 ## 빠른 시작
 

@@ -26,20 +26,28 @@ class RedisStorage(StorageInterface):
     def __init__(self):
         """Initialize Redis connection pool."""
         try:
-            self.redis = redis.Redis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=settings.REDIS_DB,
-                password=settings.REDIS_PASSWORD,
-                decode_responses=settings.REDIS_DECODE_RESPONSES,
-                socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
-                socket_connect_timeout=settings.REDIS_SOCKET_CONNECT_TIMEOUT,
-                retry_on_timeout=settings.REDIS_RETRY_ON_TIMEOUT,
-                max_connections=settings.REDIS_MAX_CONNECTIONS
-            )
+            redis_kwargs = {
+                "decode_responses": settings.REDIS_DECODE_RESPONSES,
+                "socket_timeout": settings.REDIS_SOCKET_TIMEOUT,
+                "socket_connect_timeout": settings.REDIS_SOCKET_CONNECT_TIMEOUT,
+                "retry_on_timeout": settings.REDIS_RETRY_ON_TIMEOUT,
+                "max_connections": settings.REDIS_MAX_CONNECTIONS,
+            }
+            if settings.REDIS_URL:
+                self.redis = redis.Redis.from_url(settings.REDIS_URL, **redis_kwargs)
+                redis_label = "REDIS_URL"
+            else:
+                self.redis = redis.Redis(
+                    host=settings.REDIS_HOST,
+                    port=settings.REDIS_PORT,
+                    db=settings.REDIS_DB,
+                    password=settings.REDIS_PASSWORD,
+                    **redis_kwargs
+                )
+                redis_label = f"{settings.REDIS_HOST}:{settings.REDIS_PORT}"
             # Test connection
             self.redis.ping()
-            logger.info(f"Redis connected: {settings.REDIS_HOST}:{settings.REDIS_PORT}")
+            logger.info(f"Redis connected: {redis_label}")
         except redis.RedisError as e:
             logger.error(f"Redis connection failed: {e}")
             raise

@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: train-reservation-bot
+    runtime: docker
+    plan: starter
+    branch: srt-mvp
+    autoDeployTrigger: commit
+    envVars:
+      - key: BOTTOKEN
+        sync: false
+      - key: USERID
+        sync: false
+      - key: USERPW
+        sync: false
+      - key: SRT_USERID
+        sync: false
+      - key: SRT_USERPW
+        sync: false
+      - key: SRT_SEARCH_INTERVAL
+        value: "1"
+      - key: SRT_PAYMENT_URL
+        value: https://etk.srail.kr/
+      - key: ALLOW_LIST
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: train-reservation-bot-redis
+          property: connectionString
+      - key: REDIS_DB
+        value: "0"
+      - key: FLASK_HOST
+        value: 0.0.0.0
+      - key: FLASK_DEBUG
+        value: "False"
+      - key: PAYMENT_TIMEOUT_MINUTES
+        value: "10"
+      - key: PAYMENT_REMINDER_INTERVAL
+        value: "120"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+  - type: keyvalue
+    name: train-reservation-bot-redis
+    plan: starter
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru

@@ -81,6 +81,50 @@ class TestConversationHandler:
         assert updated_session.last_action == UserProgress.PROVIDER_INPUT_SUCCESS
         assert updated_session.train_info["provider"] == "SRT"
         self.telegram.send_message.assert_called_once()
+        assert "SRT 로그인 정보" in self.telegram.send_message.call_args[0][1]
+
+    @patch('services.srt_service.SrtService.login')
+    def test_srt_magic_login_uses_srt_env_credentials(self, mock_login):
+        """Test magic login uses SRT env credentials after SRT is selected."""
+        mock_login.return_value = True
+        chat_id = 12345
+        session = UserSession(
+            chat_id=chat_id,
+            in_progress=True,
+            last_action=UserProgress.PROVIDER_INPUT_SUCCESS
+        )
+        session.train_info = {"provider": "SRT"}
+        self.storage.save_user_session(session)
+
+        with patch('config.settings.settings.SRT_USERID', 'srt-user'), \
+             patch('config.settings.settings.SRT_USERPW', 'srt-password'):
+            self.handler.handle_message(chat_id, "yubi")
+
+        updated_session = self.storage.get_user_session(chat_id)
+        assert updated_session.last_action == UserProgress.PW_INPUT_SUCCESS
+        assert updated_session.credentials.korail_id == "srt-user"
+        assert updated_session.credentials.korail_pw == "srt-password"
+        mock_login.assert_called_once_with("srt-user", "srt-password")
+
+    @patch('services.srt_service.SrtService.login')
+    def test_srt_password_failure_uses_srt_message(self, mock_login):
+        """Test SRT login failure does not mention Korail reset instructions."""
+        mock_login.return_value = False
+        chat_id = 12345
+        session = UserSession(
+            chat_id=chat_id,
+            in_progress=True,
+            last_action=UserProgress.ID_INPUT_SUCCESS
+        )
+        session.train_info = {"provider": "SRT"}
+        session.credentials = UserCredentials(korail_id="010-1234-5678", korail_pw="")
+        self.storage.save_user_session(session)
+
+        self.handler.handle_message(chat_id, "wrong-password")
+
+        message = self.telegram.send_message.call_args[0][1]
+        assert "SRT 홈페이지" in message
+        assert "코레일 홈페이지" not in message
 
     def test_start_confirmation_no(self):
         """Test start confirmation with 'N'."""
@@ -311,6 +355,32 @@ class TestConversationHandler:
 
         assert updated_session.last_action == UserProgress.TRAIN_TYPE_INPUT_SUCCESS
         assert updated_session.train_info["trainType"] == "SRT"
+        message = self.telegram.send_message.call_args[0][1]
+        assert "시간 입력 완료" in message
+        assert "열차 종류 선택 완료" not in message
+
+    def test_srt_station_prompts_do_not_use_korail_station_link(self):
+        """Test SRT station prompts avoid KTX/Korail station list links."""
+        chat_id = 12345
+        session = UserSession(
+            chat_id=chat_id,
+            in_progress=True,
+            last_action=UserProgress.PW_INPUT_SUCCESS
+        )
+        session.train_info = {"provider": "SRT"}
+        self.storage.save_user_session(session)
+
+        from datetime import datetime, timedelta
+        future_date = (datetime.now() + timedelta(days=7)).strftime("%Y%m%d")
+        self.handler.handle_message(chat_id, future_date)
+        date_message = self.telegram.send_message.call_args[0][1]
+        assert "letskorail" not in date_message
+        assert "수서" in date_message
+
+        self.handler.handle_message(chat_id, "수서")
+        src_message = self.telegram.send_message.call_args[0][1]
+        assert "letskorail" not in src_message
+        assert "부산" in src_message
 
     def test_seat_option_selection(self):
         """Test seat option selection."""
