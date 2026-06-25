@@ -44,6 +44,7 @@ FLASK_DEBUG=False
    - `USERID`, `USERPW` (KTX 매직 로그인용)
    - `SRT_USERID`, `SRT_USERPW` (SRT 매직 로그인용)
    - `ALLOW_LIST` (비워두면 전체 허용)
+   - `REDIS_URL` (기존 `ktx-redis` Key Value의 Internal Redis URL 또는 Connection String)
 4. 배포가 끝나면 Web Service URL 뒤에 `/telebot`을 붙여 Telegram webhook으로 설정합니다.
 
 ```bash
@@ -52,7 +53,7 @@ curl -X POST "https://api.telegram.org/bot${BOTTOKEN}/setWebhook" \
   -d "{\"url\":\"https://your-render-service.onrender.com/telebot\",\"drop_pending_updates\":true}"
 ```
 
-Render에서는 `PORT`와 `REDIS_URL`을 자동으로 주입받을 수 있도록 코드가 처리합니다.
+Render에서는 `PORT`를 자동으로 읽고, `REDIS_URL`이 있으면 Redis 연결 문자열을 우선 사용합니다. 기존 KTX Redis와 함께 쓸 때는 `REDIS_DB=1`로 분리합니다.
 
 ## 빠른 시작
 

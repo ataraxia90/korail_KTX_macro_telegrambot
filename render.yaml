@@ -23,12 +23,9 @@ services:
       - key: ALLOW_LIST
         sync: false
       - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: train-reservation-bot-redis
-          property: connectionString
+        sync: false
       - key: REDIS_DB
-        value: "0"
+        value: "1"
       - key: FLASK_HOST
         value: 0.0.0.0
       - key: FLASK_DEBUG
@@ -41,9 +38,3 @@ services:
         value: INFO
       - key: PYTHONUNBUFFERED
         value: "1"
-
-  - type: keyvalue
-    name: train-reservation-bot-redis
-    plan: free
-    ipAllowList: []
-    maxmemoryPolicy: allkeys-lru

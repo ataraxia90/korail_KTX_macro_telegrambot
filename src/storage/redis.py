@@ -34,8 +34,12 @@ class RedisStorage(StorageInterface):
                 "max_connections": settings.REDIS_MAX_CONNECTIONS,
             }
             if settings.REDIS_URL:
-                self.redis = redis.Redis.from_url(settings.REDIS_URL, **redis_kwargs)
-                redis_label = "REDIS_URL"
+                self.redis = redis.Redis.from_url(
+                    settings.REDIS_URL,
+                    db=settings.REDIS_DB,
+                    **redis_kwargs
+                )
+                redis_label = f"REDIS_URL db={settings.REDIS_DB}"
             else:
                 self.redis = redis.Redis(
                     host=settings.REDIS_HOST,

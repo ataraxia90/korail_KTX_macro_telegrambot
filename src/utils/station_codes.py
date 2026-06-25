@@ -79,7 +79,11 @@ class StationManager:
                 "socket_connect_timeout": 5,
             }
             if settings.REDIS_URL:
-                self._redis_client = redis.Redis.from_url(settings.REDIS_URL, **redis_kwargs)
+                self._redis_client = redis.Redis.from_url(
+                    settings.REDIS_URL,
+                    db=settings.REDIS_DB,
+                    **redis_kwargs
+                )
             else:
                 self._redis_client = redis.Redis(
                     host=settings.REDIS_HOST,
