@@ -2,7 +2,7 @@ services:
   - type: web
     name: train-reservation-bot
     runtime: docker
-    plan: starter
+    plan: free
     branch: srt-mvp
     autoDeployTrigger: commit
     envVars:
@@ -44,6 +44,6 @@ services:
 
   - type: keyvalue
     name: train-reservation-bot-redis
-    plan: starter
+    plan: free
     ipAllowList: []
     maxmemoryPolicy: allkeys-lru
