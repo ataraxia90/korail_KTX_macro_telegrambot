@@ -37,6 +37,13 @@ application = Flask(__name__)
 CORS(application)
 api = Api(application)
 
+
+@application.get("/")
+@application.get("/healthz")
+def health_check():
+    """Health check endpoint for Render and uptime monitors."""
+    return {"status": "ok"}, 200
+
 # Initialize storage (Redis)
 try:
     storage = RedisStorage()
