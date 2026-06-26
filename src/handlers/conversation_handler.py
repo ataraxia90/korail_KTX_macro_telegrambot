@@ -1,4 +1,6 @@
 """Conversation flow handler for reservation process."""
+import re
+
 from korail2 import TrainType, ReserveOption
 
 from config.settings import settings
@@ -412,6 +414,9 @@ class ConversationHandler:
         """Show final confirmation summary."""
         passenger_count = session.train_info.get('passengerCount', 1)
         seat_strategy_display = session.train_info.get('seatStrategyShow', '1명')
+        target_trains = self._get_target_train_summary(session)
+        session.train_info['targetTrains'] = target_trains
+        self.storage.save_user_session(session)
 
         from telegramBot.messages import Messages
         summary = Messages.CONFIRM_RESERVATION.format(
@@ -421,12 +426,119 @@ class ConversationHandler:
             dstLocate=session.train_info['dstLocate'],
             depTime=session.train_info['depTime'][:4],
             maxDepTime=session.train_info['maxDepTime'],
+            targetTrains=target_trains,
             trainTypeShow=session.train_info['trainTypeShow'],
             specialInfoShow=session.train_info['specialInfoShow'],
             passengerCount=passenger_count,
             seatStrategy=seat_strategy_display
         )
         self.telegram.send_message(chat_id, summary)
+
+    def _get_target_train_summary(self, session: UserSession) -> str:
+        """Return a user-facing summary of trains matched by the current search criteria."""
+        if not session.credentials:
+            return "조회 불가(로그인 정보 없음)"
+
+        provider = session.train_info.get('provider', 'KTX')
+        try:
+            train_service = SrtService() if provider == "SRT" else KorailService()
+            if not train_service.login(session.credentials.korail_id, session.credentials.korail_pw):
+                return "조회 실패(로그인 실패)"
+
+            kwargs = {
+                "dep_date": session.train_info['depDate'],
+                "src_locate": session.train_info['srcLocate'],
+                "dst_locate": session.train_info['dstLocate'],
+                "dep_time": session.train_info['depTime'],
+                "max_dep_time": session.train_info['maxDepTime'],
+                "passenger_count": session.train_info.get('passengerCount', 1),
+                "verbose": False,
+            }
+            if provider != "SRT":
+                kwargs["train_type"] = self._parse_korail_train_type(
+                    session.train_info.get('trainType', 'TrainType.KTX')
+                )
+
+            trains = train_service.search_trains(**kwargs)
+            if not trains:
+                return "없음(현재 조건에 조회된 열차 없음)"
+
+            summaries = [self._format_train_target(train, provider) for train in trains]
+            display_limit = 5
+            if len(summaries) > display_limit:
+                hidden_count = len(summaries) - display_limit
+                return f"{', '.join(summaries[:display_limit])} 외 {hidden_count}건"
+            return ", ".join(summaries)
+        except Exception as e:
+            logger.warning(f"Failed to load target trains for final confirmation: {e}")
+            return "조회 실패(예약 시작 시 다시 검색)"
+
+    def _parse_korail_train_type(self, train_type_str: str):
+        """Parse persisted train type string back to korail2 TrainType."""
+        if "ALL" in str(train_type_str).upper():
+            return TrainType.ALL
+        return TrainType.KTX
+
+    def _format_train_target(self, train, provider: str) -> str:
+        """Format a searched train as a compact target label."""
+        number = self._extract_train_number(train, provider)
+        dep_time = self._extract_train_departure_time(train)
+
+        if number and dep_time:
+            return f"{number}({dep_time})"
+        if number:
+            return number
+        if dep_time:
+            return f"{provider}{dep_time}"
+        return str(train)
+
+    def _extract_train_number(self, train, provider: str) -> str:
+        """Extract a train number/name from common korail2 and SRTrain object shapes."""
+        for attr in (
+            "train_no", "trainnum", "train_num", "train_number", "number",
+            "train_name", "name", "train", "type"
+        ):
+            value = getattr(train, attr, None)
+            if value:
+                text = str(value).strip()
+                if text and text.lower() not in ("none", "null"):
+                    return self._normalize_train_number(text, provider)
+
+        text = str(train)
+        patterns = [
+            r"\b(SRT|KTX)[\s-]*(\d{1,4})\b",
+            r"\b(\d{1,4})\s*(?:열차|호차|호)\b",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                if len(match.groups()) == 2:
+                    return f"{match.group(1).upper()}{match.group(2)}"
+                return f"{provider}{match.group(1)}"
+        return ""
+
+    def _normalize_train_number(self, text: str, provider: str) -> str:
+        """Normalize train labels like '308' or 'SRT 308' to a readable form."""
+        match = re.search(r"\b(SRT|KTX)[\s-]*(\d{1,4})\b", text, re.IGNORECASE)
+        if match:
+            return f"{match.group(1).upper()}{match.group(2)}"
+        if text.isdigit():
+            return f"{provider}{text}"
+        return text
+
+    def _extract_train_departure_time(self, train) -> str:
+        """Extract HH:MM departure time from train attributes or string output."""
+        for attr in ("dep_time", "departure_time", "time"):
+            value = getattr(train, attr, None)
+            if value:
+                digits = "".join(ch for ch in str(value) if ch.isdigit())
+                if len(digits) >= 4:
+                    return f"{digits[:2]}:{digits[2:4]}"
+
+        match = re.search(r"(\d{1,2}):(\d{2})\s*~", str(train))
+        if match:
+            return f"{int(match.group(1)):02d}:{match.group(2)}"
+        return ""
 
     def _handle_final_confirmation(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle final confirmation before starting reservation."""

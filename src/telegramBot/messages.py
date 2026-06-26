@@ -246,6 +246,7 @@ class Messages:
 🏁 도착역: {dstLocate}
 🕐 검색 시작: {depTime}
 ⏰ 검색 종료: {maxDepTime}
+🎯 대상 열차: {targetTrains}
 🚄 열차: {trainTypeShow}
 💺 좌석: {specialInfoShow}
 👥 인원: {passengerCount}명
