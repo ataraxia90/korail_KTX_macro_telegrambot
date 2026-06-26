@@ -64,6 +64,7 @@ class PaymentStatus:
     completed: bool = False
     reservation_time: Optional[datetime] = None
     reminder_active: bool = False
+    completion_message_sent: bool = False
 
     def __post_init__(self) -> None:
         if self.reservation_time is None:

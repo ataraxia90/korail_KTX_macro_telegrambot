@@ -94,9 +94,6 @@ class CommandHandler:
         # Clear admin password waiting state if any
         self.storage.set_waiting_for_admin_password(chat_id, False)
 
-        # Send cancellation message
-        self.telegram.send_message(chat_id, "✅ 예약이 취소되었습니다.")
-
 
     def handle_subscribe(self, chat_id: int) -> None:
         """

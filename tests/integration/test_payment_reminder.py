@@ -64,6 +64,20 @@ class TestPaymentReminderService:
         call_args = self.telegram.send_message.call_args
         assert "완료" in call_args[0][1] or "확인" in call_args[0][1]
 
+    def test_completion_message_sent_once_when_loop_also_observes_completion(self):
+        """Test completion notification is not duplicated by the reminder loop."""
+        chat_id = 12345
+
+        status = PaymentStatus(chat_id=chat_id, completed=False, reminder_active=True)
+        self.storage.save_payment_status(status)
+
+        self.service.confirm_payment(chat_id)
+        self.service._send_completion_message(chat_id)
+
+        self.telegram.send_message.assert_called_once()
+        updated_status = self.storage.get_payment_status(chat_id)
+        assert updated_status.completion_message_sent is True
+
     def test_confirm_payment_no_status(self):
         """Test confirming payment when no status exists."""
         chat_id = 12345

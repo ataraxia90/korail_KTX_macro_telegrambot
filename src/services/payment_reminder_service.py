@@ -184,6 +184,17 @@ class PaymentReminderService:
 
     def _send_completion_message(self, chat_id: int) -> None:
         """Send reminder stopped message (user sent a message)."""
+        payment_status = self.storage.get_payment_status(chat_id)
+        if payment_status and payment_status.completion_message_sent:
+            logger.info(f"Reminder stopped message already sent to chat_id={chat_id}")
+            return
+
+        if payment_status:
+            payment_status.completion_message_sent = True
+            payment_status.completed = True
+            payment_status.reminder_active = False
+            self.storage.save_payment_status(payment_status)
+
         self.telegram.send_message(chat_id, Messages.PAYMENT_REMINDER_STOPPED)
         logger.info(f"Sent reminder stopped message to chat_id={chat_id}")
 

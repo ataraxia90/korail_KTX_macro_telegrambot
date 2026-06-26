@@ -39,7 +39,7 @@ class SrtBackgroundReservationProcess:
         try:
             if not self.srt.login(self.username, self.password):
                 self._send_callback(
-                    "SRT login failed. Check your ID/password, then use /cancel and try again.",
+                    "❌ SRT 로그인에 실패했습니다.\n\n아이디/비밀번호를 확인한 뒤 /cancel 후 다시 시도해주세요.",
                     status=1
                 )
                 return
@@ -56,24 +56,25 @@ class SrtBackgroundReservationProcess:
 
             if reservation:
                 self._send_callback(
-                    "SRT reservation succeeded.\n"
-                    f"===================\n{reservation}\n===================\n"
-                    f"Payment link: {settings.SRT_PAYMENT_URL}",
+                    "🎉 SRT 예약에 성공했습니다!\n\n"
+                    "예약 정보는 다음과 같습니다.\n"
+                    f"===================\n{reservation}\n===================\n\n"
+                    f"⚠️ 중요: {settings.PAYMENT_TIMEOUT_MINUTES}분 내에 SRT 사이트에서 결제를 완료해주세요.\n"
+                    f"🔗 결제 링크: {settings.SRT_PAYMENT_URL}",
                     status=0
                 )
             else:
                 if self.srt.last_stop_reason:
                     self._send_callback(
-                        "SRT reservation monitoring stopped.\n"
-                        "The last target train has already departed, so no more "
-                        "reservations can be attempted for this search.",
+                        "🚫 SRT 예약 감시가 종료되었습니다.\n\n"
+                        "마지막 대상 열차의 출발 시간이 지나 더 이상 예약을 시도할 수 없습니다.",
                         status=1
                     )
                 else:
-                    self._send_callback("No reservable SRT train was found.", status=1)
+                    self._send_callback("❌ 예약 가능한 SRT 열차를 찾지 못했습니다.", status=1)
         except Exception as e:
             logger.error(f"SRT reservation process error: {e}", exc_info=True)
-            self._send_callback(f"SRT reservation failed with an error: {e}", status=1)
+            self._send_callback(f"❌ SRT 예약 처리 중 오류가 발생했습니다.\n\n오류: {e}", status=1)
 
     def _send_callback(self, message: str, status: int = 0):
         try:

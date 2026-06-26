@@ -525,6 +525,7 @@ class RedisStorage(StorageInterface):
             "chat_id": status.chat_id,
             "reminder_active": status.reminder_active,
             "completed": status.completed,
+            "completion_message_sent": status.completion_message_sent,
             "reservation_time": status.reservation_time.isoformat() if status.reservation_time else None
         }
 
@@ -536,6 +537,7 @@ class RedisStorage(StorageInterface):
             chat_id=data["chat_id"],
             reminder_active=data["reminder_active"],
             completed=data["completed"],
+            completion_message_sent=data.get("completion_message_sent", False),
             reservation_time=datetime.fromisoformat(data["reservation_time"]) if data.get("reservation_time") else None
         )
 
