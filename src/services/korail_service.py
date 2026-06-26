@@ -1,7 +1,9 @@
 """Korail API service wrapper."""
 import re
 import time
+from datetime import datetime
 from typing import Optional, List
+from zoneinfo import ZoneInfo
 from korail2 import (
     Korail as K2MKorail, TrainType, ReserveOption, SoldOutError, NoResultsError,
     AdultPassenger
@@ -26,6 +28,7 @@ class KorailService:
         self._last_login_time: float = 0
         self._relogin_interval: int = 30 * 60  # 30 minutes
         self._relogin_count: int = 0
+        self.last_stop_reason: Optional[str] = None
 
         # Log class methods to verify correct version is loaded
         logger.debug(f"KorailService initialized with methods: {[m for m in dir(self) if not m.startswith('_')]}")
@@ -312,16 +315,25 @@ class KorailService:
             f"Starting reservation loop: {src_locate} -> {dst_locate} "
             f"on {dep_date} at {dep_time} for {passenger_count} passengers ({seat_strategy} seating)"
         )
+        cutoff_at = self._get_search_cutoff_time(
+            dep_date=dep_date,
+            src_locate=src_locate,
+            dst_locate=dst_locate,
+            dep_time=dep_time,
+            max_dep_time=max_dep_time,
+            train_type=train_type,
+            passenger_count=passenger_count
+        )
 
         if seat_strategy == "consecutive":
             return self._search_and_reserve_consecutive(
                 dep_date, src_locate, dst_locate, dep_time, max_dep_time,
-                train_type, reserve_option, passenger_count, max_attempts
+                train_type, reserve_option, passenger_count, max_attempts, cutoff_at
             )
         else:  # random
             return self._search_and_reserve_random(
                 dep_date, src_locate, dst_locate, dep_time, max_dep_time,
-                train_type, reserve_option, passenger_count, max_attempts
+                train_type, reserve_option, passenger_count, max_attempts, cutoff_at
             )
 
     def _search_and_reserve_consecutive(
@@ -334,7 +346,8 @@ class KorailService:
         train_type: TrainType,
         reserve_option: ReserveOption,
         passenger_count: int,
-        max_attempts: Optional[int]
+        max_attempts: Optional[int],
+        cutoff_at: Optional[datetime]
     ):
         """Reserve seats consecutively (together)."""
         attempts = 0
@@ -346,6 +359,9 @@ class KorailService:
             attempts += 1
             if max_attempts and attempts > max_attempts:
                 logger.warning(f"❌ Reached max attempts ({max_attempts}), stopping")
+                return None
+
+            if self._is_search_expired(cutoff_at):
                 return None
 
             if attempts % 1000 == 0:
@@ -406,7 +422,8 @@ class KorailService:
         train_type: TrainType,
         reserve_option: ReserveOption,
         passenger_count: int,
-        max_attempts: Optional[int]
+        max_attempts: Optional[int],
+        cutoff_at: Optional[datetime]
     ):
         """Reserve seats randomly (one at a time until target count reached)."""
         attempts = 0
@@ -421,6 +438,10 @@ class KorailService:
             if max_attempts and attempts > max_attempts:
                 logger.warning(f"Reached max attempts ({max_attempts}), stopping")
                 # Cancel any partial reservations
+                self._cancel_reservations(reservations)
+                return None
+
+            if self._is_search_expired(cutoff_at):
                 self._cancel_reservations(reservations)
                 return None
 
@@ -496,6 +517,79 @@ class KorailService:
             time.sleep(self._search_interval)
 
         return reservations[0] if reservations else None
+
+    def _get_search_cutoff_time(
+        self,
+        dep_date: str,
+        src_locate: str,
+        dst_locate: str,
+        dep_time: str,
+        max_dep_time: str,
+        train_type: TrainType,
+        passenger_count: int
+    ) -> Optional[datetime]:
+        """Return when the reservation loop should stop in Asia/Seoul time."""
+        candidate_times = []
+        try:
+            target_trains = self.search_trains(
+                dep_date=dep_date,
+                src_locate=src_locate,
+                dst_locate=dst_locate,
+                dep_time=dep_time,
+                max_dep_time=max_dep_time,
+                train_type=train_type,
+                passenger_count=passenger_count,
+                verbose=False
+            )
+            candidate_times = [
+                self._extract_departure_time(train)
+                for train in target_trains
+            ]
+            candidate_times = [time_value for time_value in candidate_times if time_value > 0]
+        except Exception as e:
+            logger.warning(f"Failed to calculate Korail target train cutoff: {e}")
+
+        if candidate_times:
+            cutoff_hhmm = max(candidate_times)
+        elif max_dep_time and max_dep_time != "2400":
+            cutoff_hhmm = int(max_dep_time)
+        else:
+            cutoff_hhmm = 2359
+
+        return self._build_kst_datetime(dep_date, cutoff_hhmm)
+
+    def _is_search_expired(self, cutoff_at: Optional[datetime]) -> bool:
+        """Return True once the last target train can no longer be reserved."""
+        if cutoff_at and self._now_kst() >= cutoff_at:
+            self.last_stop_reason = (
+                f"search window expired after last target train departure "
+                f"({cutoff_at.strftime('%Y-%m-%d %H:%M')})"
+            )
+            logger.info(f"Korail reservation loop stopped: {self.last_stop_reason}")
+            return True
+        return False
+
+    def _build_kst_datetime(self, dep_date: str, hhmm: int) -> Optional[datetime]:
+        """Build an Asia/Seoul datetime from YYYYMMDD and HHMM."""
+        try:
+            hour = hhmm // 100
+            minute = hhmm % 100
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                return None
+            date_part = datetime.strptime(dep_date[:8], "%Y%m%d")
+            return date_part.replace(
+                hour=hour,
+                minute=minute,
+                second=0,
+                microsecond=0,
+                tzinfo=ZoneInfo("Asia/Seoul")
+            )
+        except ValueError:
+            return None
+
+    def _now_kst(self) -> datetime:
+        """Current time in Asia/Seoul."""
+        return datetime.now(ZoneInfo("Asia/Seoul"))
 
     def _cancel_reservations(self, reservations: List) -> None:
         """Cancel a list of reservations (cleanup for failed random allocation)."""

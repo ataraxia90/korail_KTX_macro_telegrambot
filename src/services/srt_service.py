@@ -1,7 +1,9 @@
 """SRT API service wrapper."""
 import re
 import time
+from datetime import datetime
 from typing import Optional, List, Any
+from zoneinfo import ZoneInfo
 
 from config.settings import settings
 from utils.logger import get_logger
@@ -26,6 +28,7 @@ class SrtService:
         self._srt_instance: Optional[Any] = None
         self._logged_in = False
         self._search_interval = settings.SRT_SEARCH_INTERVAL
+        self.last_stop_reason: Optional[str] = None
 
     def login(self, username: str, password: str) -> bool:
         """Login to SRT with credentials."""
@@ -137,9 +140,26 @@ class SrtService:
     ):
         """Search and reserve until successful."""
         attempts = 0
+        cutoff_at = self._get_search_cutoff_time(
+            dep_date=dep_date,
+            src_locate=src_locate,
+            dst_locate=dst_locate,
+            dep_time=dep_time,
+            max_dep_time=max_dep_time,
+            passenger_count=passenger_count
+        )
+
         while True:
             attempts += 1
             if max_attempts and attempts > max_attempts:
+                return None
+
+            if cutoff_at and self._now_kst() >= cutoff_at:
+                self.last_stop_reason = (
+                    f"search window expired after last target train departure "
+                    f"({cutoff_at.strftime('%Y-%m-%d %H:%M')})"
+                )
+                logger.info(f"SRT reservation loop stopped: {self.last_stop_reason}")
                 return None
 
             trains = self.search_trains(
@@ -158,6 +178,67 @@ class SrtService:
                     return reservation
 
             time.sleep(self._search_interval)
+
+    def _get_search_cutoff_time(
+        self,
+        dep_date: str,
+        src_locate: str,
+        dst_locate: str,
+        dep_time: str,
+        max_dep_time: str,
+        passenger_count: int
+    ) -> Optional[datetime]:
+        """Return when the reservation loop should stop in Asia/Seoul time."""
+        candidate_times = []
+        try:
+            target_trains = self.search_trains(
+                dep_date=dep_date,
+                src_locate=src_locate,
+                dst_locate=dst_locate,
+                dep_time=dep_time,
+                max_dep_time=max_dep_time,
+                passenger_count=passenger_count,
+                verbose=False,
+                available_only=False
+            )
+            candidate_times = [
+                self._extract_departure_time(train)
+                for train in target_trains
+            ]
+            candidate_times = [time_value for time_value in candidate_times if time_value > 0]
+        except Exception as e:
+            logger.warning(f"Failed to calculate SRT target train cutoff: {e}")
+
+        if candidate_times:
+            cutoff_hhmm = max(candidate_times)
+        elif max_dep_time and max_dep_time != "2400":
+            cutoff_hhmm = int(max_dep_time)
+        else:
+            cutoff_hhmm = 2359
+
+        return self._build_kst_datetime(dep_date, cutoff_hhmm)
+
+    def _build_kst_datetime(self, dep_date: str, hhmm: int) -> Optional[datetime]:
+        """Build an Asia/Seoul datetime from YYYYMMDD and HHMM."""
+        try:
+            hour = hhmm // 100
+            minute = hhmm % 100
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                return None
+            date_part = datetime.strptime(dep_date[:8], "%Y%m%d")
+            return date_part.replace(
+                hour=hour,
+                minute=minute,
+                second=0,
+                microsecond=0,
+                tzinfo=ZoneInfo("Asia/Seoul")
+            )
+        except ValueError:
+            return None
+
+    def _now_kst(self) -> datetime:
+        """Current time in Asia/Seoul."""
+        return datetime.now(ZoneInfo("Asia/Seoul"))
 
     def parse_seat_type(self, option_str: str):
         """Map KTX-style option strings to SRTrain SeatType values."""

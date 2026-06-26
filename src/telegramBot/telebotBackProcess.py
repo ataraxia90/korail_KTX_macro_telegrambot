@@ -338,6 +338,15 @@ class BackgroundReservationProcess:
 
             else:
                 logger.warning("Reservation failed - no result")
+                if self.korail.last_stop_reason:
+                    message = """
+🚫 예약 감시 종료
+
+마지막 대상 열차의 출발 시간이 지나 더 이상 예약을 시도할 수 없습니다.
+"""
+                    self._send_callback(message, status=1)
+                    return
+
                 message = """
 알수 없는 오류로 예매에 실패했습니다. 처음부터 다시 시도해주세요.
 
@@ -556,6 +565,15 @@ class BackgroundReservationProcess:
 
             if not reservation:
                 logger.error(f"No reservation returned for seat {seat_index + 1}")
+                if self.korail.last_stop_reason:
+                    error_msg = """
+🚫 예약 감시 종료
+
+마지막 대상 열차의 출발 시간이 지나 더 이상 예약을 시도할 수 없습니다.
+"""
+                    self._send_callback(error_msg, status=1)
+                    return
+
                 error_msg = f"❌ {seat_index + 1}번째 좌석 예약 실패 (결과 없음)"
                 self._send_callback(error_msg, status=1)
                 return
@@ -646,11 +664,23 @@ class BackgroundReservationProcess:
         attempts = 0
         max_attempts = None  # Infinite
         duplicate_notified = False  # Track if we already notified about duplicate
+        cutoff_at = self.korail._get_search_cutoff_time(
+            dep_date=self.dep_date,
+            src_locate=self.src_locate,
+            dst_locate=self.dst_locate,
+            dep_time=self.dep_time,
+            max_dep_time=self.max_dep_time,
+            train_type=self.train_type,
+            passenger_count=1
+        )
 
         while True:
             attempts += 1
             if max_attempts and attempts > max_attempts:
                 logger.error(f"Max attempts reached for seat {seat_index + 1}")
+                return None
+
+            if self.korail._is_search_expired(cutoff_at):
                 return None
 
             is_summary = (attempts % 60 == 0)

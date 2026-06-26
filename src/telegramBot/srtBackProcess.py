@@ -62,7 +62,15 @@ class SrtBackgroundReservationProcess:
                     status=0
                 )
             else:
-                self._send_callback("No reservable SRT train was found.", status=1)
+                if self.srt.last_stop_reason:
+                    self._send_callback(
+                        "SRT reservation monitoring stopped.\n"
+                        "The last target train has already departed, so no more "
+                        "reservations can be attempted for this search.",
+                        status=1
+                    )
+                else:
+                    self._send_callback("No reservable SRT train was found.", status=1)
         except Exception as e:
             logger.error(f"SRT reservation process error: {e}", exc_info=True)
             self._send_callback(f"SRT reservation failed with an error: {e}", status=1)

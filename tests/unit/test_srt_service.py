@@ -1,5 +1,7 @@
 """Unit tests for SRT service wrapper."""
 from types import SimpleNamespace
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from services.srt_service import SrtService
 from services import srt_service
@@ -66,6 +68,19 @@ class FakeSRTWithAvailabilityOption(FakeSRT):
         return [SimpleNamespace(dep_date=date, dep_time="152000", train_number="362")]
 
 
+class FakeSRTWithExpiredTarget(FakeSRT):
+    def __init__(self, username, password, auto_login=False):
+        super().__init__(username, password, auto_login=auto_login)
+        self.reserve_called = False
+
+    def search_train(self, src, dst, date, time, available_only=True):
+        return [SimpleNamespace(dep_date=date, dep_time="152000", train_number="362")]
+
+    def reserve(self, train, passengers=None, special_seat=None):
+        self.reserve_called = True
+        return super().reserve(train, passengers=passengers, special_seat=special_seat)
+
+
 def test_srt_login_success_and_failure():
     service = SrtService(srt_cls=FakeSRT, seat_type_cls=FakeSeatType, adult_cls=FakeAdult)
 
@@ -115,6 +130,26 @@ def test_srt_search_can_include_unavailable_trains_for_target_summary():
 
     assert service._srt_instance.available_only is False
     assert [train.train_number for train in trains] == ["362"]
+
+
+def test_srt_loop_stops_after_last_target_train_departure():
+    service = SrtService(srt_cls=FakeSRTWithExpiredTarget, seat_type_cls=FakeSeatType, adult_cls=FakeAdult)
+    service.login("user", "ok")
+    service._now_kst = lambda: datetime(2026, 7, 1, 15, 21, tzinfo=ZoneInfo("Asia/Seoul"))
+
+    reservation = service.search_and_reserve_loop(
+        dep_date="20260701",
+        src_locate="대전",
+        dst_locate="수서",
+        dep_time="150000",
+        max_dep_time="1530",
+        passenger_count=1,
+        max_attempts=1,
+    )
+
+    assert reservation is None
+    assert service._srt_instance.reserve_called is False
+    assert "last target train" in service.last_stop_reason
 
 
 def test_srt_search_and_reserve_loop_uses_seat_type_and_passengers():
