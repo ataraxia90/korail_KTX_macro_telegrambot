@@ -454,7 +454,9 @@ class ConversationHandler:
                 "passenger_count": session.train_info.get('passengerCount', 1),
                 "verbose": False,
             }
-            if provider != "SRT":
+            if provider == "SRT":
+                kwargs["available_only"] = False
+            else:
                 kwargs["train_type"] = self._parse_korail_train_type(
                     session.train_info.get('trainType', 'TrainType.KTX')
                 )

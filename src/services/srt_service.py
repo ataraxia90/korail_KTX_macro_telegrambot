@@ -57,7 +57,8 @@ class SrtService:
         dep_time: str = "000000",
         max_dep_time: str = "2400",
         passenger_count: int = 1,
-        verbose: bool = True
+        verbose: bool = True,
+        available_only: Optional[bool] = None
     ) -> List:
         """Search SRT trains and filter by max departure time."""
         if not self._logged_in or not self._srt_instance:
@@ -65,19 +66,39 @@ class SrtService:
 
         dep_time_hhmm = dep_time[:4]
         try:
-            trains = self._srt_instance.search_train(
-                src_locate,
-                dst_locate,
-                dep_date,
-                dep_time_hhmm
-            )
+            if available_only is None:
+                trains = self._srt_instance.search_train(
+                    src_locate,
+                    dst_locate,
+                    dep_date,
+                    dep_time_hhmm
+                )
+            else:
+                trains = self._srt_instance.search_train(
+                    src_locate,
+                    dst_locate,
+                    dep_date,
+                    dep_time_hhmm,
+                    available_only=available_only
+                )
         except TypeError:
-            trains = self._srt_instance.search_train(
-                dep=src_locate,
-                arr=dst_locate,
-                date=dep_date,
-                time=dep_time_hhmm
-            )
+            try:
+                keyword_args = {
+                    "dep": src_locate,
+                    "arr": dst_locate,
+                    "date": dep_date,
+                    "time": dep_time_hhmm,
+                }
+                if available_only is not None:
+                    keyword_args["available_only"] = available_only
+                trains = self._srt_instance.search_train(**keyword_args)
+            except TypeError:
+                trains = self._srt_instance.search_train(
+                    dep=src_locate,
+                    arr=dst_locate,
+                    date=dep_date,
+                    time=dep_time_hhmm
+                )
         except Exception as e:
             logger.error(f"SRT search error: {e}", exc_info=verbose)
             return []

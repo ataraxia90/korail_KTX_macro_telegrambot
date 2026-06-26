@@ -56,6 +56,16 @@ class FakeSRTWithOvernightResult(FakeSRT):
         ]
 
 
+class FakeSRTWithAvailabilityOption(FakeSRT):
+    def __init__(self, username, password, auto_login=False):
+        super().__init__(username, password, auto_login=auto_login)
+        self.available_only = None
+
+    def search_train(self, src, dst, date, time, available_only=True):
+        self.available_only = available_only
+        return [SimpleNamespace(dep_date=date, dep_time="152000", train_number="362")]
+
+
 def test_srt_login_success_and_failure():
     service = SrtService(srt_cls=FakeSRT, seat_type_cls=FakeSeatType, adult_cls=FakeAdult)
 
@@ -95,6 +105,16 @@ def test_srt_search_filters_out_next_day_overnight_trains():
     trains = service.search_trains("20260701", "대전", "수서", "082500", "0830")
 
     assert [train.name for train in trains] == ["same-day"]
+
+
+def test_srt_search_can_include_unavailable_trains_for_target_summary():
+    service = SrtService(srt_cls=FakeSRTWithAvailabilityOption, seat_type_cls=FakeSeatType, adult_cls=FakeAdult)
+    service.login("user", "ok")
+
+    trains = service.search_trains("20260701", "대전", "수서", "150000", "1530", available_only=False)
+
+    assert service._srt_instance.available_only is False
+    assert [train.train_number for train in trains] == ["362"]
 
 
 def test_srt_search_and_reserve_loop_uses_seat_type_and_passengers():
