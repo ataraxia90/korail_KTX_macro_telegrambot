@@ -31,6 +31,16 @@ class FakeKorail:
         return None
 
 
+class FakeKorailWithEarlierSameDayResults(FakeKorail):
+    def search_train(self, src, dst, date, time, train_type=None, passengers=None):
+        return [
+            FakeKorailTrain("20260701", "000600", "too-early-midnight"),
+            FakeKorailTrain("20260701", "063000", "too-early-morning"),
+            FakeKorailTrain("20260701", "082500", "in-window"),
+            FakeKorailTrain("20260701", "083000", "at-exclusive-end"),
+        ]
+
+
 def test_korail_search_filters_out_next_day_overnight_trains():
     service = KorailService()
     service._korail_instance = FakeKorail()
@@ -39,6 +49,16 @@ def test_korail_search_filters_out_next_day_overnight_trains():
     trains = service.search_trains("20260701", "대전", "서울", "082500", "0830", verbose=False)
 
     assert [train.name for train in trains] == ["same-day"]
+
+
+def test_korail_search_filters_out_same_day_trains_before_start_time():
+    service = KorailService()
+    service._korail_instance = FakeKorailWithEarlierSameDayResults()
+    service._logged_in = True
+
+    trains = service.search_trains("20260701", "대전", "서울", "082000", "0830", verbose=False)
+
+    assert [train.name for train in trains] == ["in-window"]
 
 
 def test_korail_loop_stops_after_last_target_train_departure():

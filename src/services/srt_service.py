@@ -106,7 +106,7 @@ class SrtService:
             logger.error(f"SRT search error: {e}", exc_info=verbose)
             return []
 
-        trains = self._filter_trains(trains or [], dep_date, max_dep_time)
+        trains = self._filter_trains(trains or [], dep_date, dep_time_hhmm, max_dep_time)
 
         return trains
 
@@ -283,8 +283,9 @@ class SrtService:
         except (IndexError, ValueError):
             return 0
 
-    def _filter_trains(self, trains: List, dep_date: str, max_dep_time: str) -> List:
+    def _filter_trains(self, trains: List, dep_date: str, dep_time: str, max_dep_time: str) -> List:
         requested_date = dep_date[:8]
+        min_time = int(dep_time[:4]) if dep_time and dep_time[:4].isdigit() else None
         max_time = int(max_dep_time) if max_dep_time != "2400" else None
         filtered = []
 
@@ -294,10 +295,13 @@ class SrtService:
                 logger.debug(f"Filtered SRT train outside requested date: {train}")
                 continue
 
-            if max_time is not None:
-                train_time = self._extract_departure_time(train)
-                if not (0 < train_time < max_time):
-                    continue
+            train_time = self._extract_departure_time(train)
+            if train_time <= 0:
+                continue
+            if min_time is not None and train_time < min_time:
+                continue
+            if max_time is not None and train_time >= max_time:
+                continue
 
             filtered.append(train)
 

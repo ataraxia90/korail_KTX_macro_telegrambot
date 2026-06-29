@@ -164,23 +164,37 @@ class KorailService:
 
             trains = self._filter_trains_by_date(trains or [], dep_date, verbose)
 
-            # Filter by max departure time
-            if trains and max_dep_time != "2400":
+            # Filter by requested departure time range. Some providers may return
+            # earlier trains than requested, so enforce both bounds locally.
+            min_time = int(dep_time[:4]) if dep_time and dep_time[:4].isdigit() else None
+            max_time = int(max_dep_time) if max_dep_time != "2400" else None
+            if trains and (min_time is not None or max_time is not None):
                 filtered_trains = []
-                max_time = int(max_dep_time)
 
                 if verbose:
-                    logger.debug(f"🔧 Applying max_dep_time filter: {max_dep_time}")
+                    logger.debug(f"🔧 Applying departure time filter: {min_time} <= train < {max_time or '2400'}")
 
                 for train in trains:
                     dep_time_int = self._extract_departure_time(train)
-                    if dep_time_int > 0 and dep_time_int < max_time:
-                        filtered_trains.append(train)
+                    if dep_time_int <= 0:
                         if verbose:
-                            logger.debug(f"  ✅ Kept: {dep_time_int} < {max_time}")
-                    else:
+                            logger.debug(f"  ❌ Filtered out: invalid departure time ({dep_time_int})")
+                        continue
+                    if min_time is not None and dep_time_int < min_time:
+                        if verbose:
+                            logger.debug(f"  ❌ Filtered out: {dep_time_int} < {min_time}")
+                        continue
+                    if max_time is not None and dep_time_int >= max_time:
                         if verbose:
                             logger.debug(f"  ❌ Filtered out: {dep_time_int} >= {max_time}")
+                        continue
+
+                    filtered_trains.append(train)
+                    if verbose:
+                        if max_time is None:
+                            logger.debug(f"  ✅ Kept: {dep_time_int} >= {min_time}")
+                        else:
+                            logger.debug(f"  ✅ Kept: {min_time} <= {dep_time_int} < {max_time}")
 
                 trains = filtered_trains
                 if verbose:

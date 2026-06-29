@@ -58,6 +58,16 @@ class FakeSRTWithOvernightResult(FakeSRT):
         ]
 
 
+class FakeSRTWithEarlierSameDayResults(FakeSRT):
+    def search_train(self, src, dst, date, time):
+        return [
+            SimpleNamespace(dep_date="20260701", dep_time="000600", name="too-early-midnight"),
+            SimpleNamespace(dep_date="20260701", dep_time="063000", name="too-early-morning"),
+            SimpleNamespace(dep_date="20260701", dep_time="082500", name="in-window"),
+            SimpleNamespace(dep_date="20260701", dep_time="083000", name="at-exclusive-end"),
+        ]
+
+
 class FakeSRTWithAvailabilityOption(FakeSRT):
     def __init__(self, username, password, auto_login=False):
         super().__init__(username, password, auto_login=auto_login)
@@ -120,6 +130,15 @@ def test_srt_search_filters_out_next_day_overnight_trains():
     trains = service.search_trains("20260701", "대전", "수서", "082500", "0830")
 
     assert [train.name for train in trains] == ["same-day"]
+
+
+def test_srt_search_filters_out_same_day_trains_before_start_time():
+    service = SrtService(srt_cls=FakeSRTWithEarlierSameDayResults, seat_type_cls=FakeSeatType, adult_cls=FakeAdult)
+    service.login("user", "ok")
+
+    trains = service.search_trains("20260701", "대전", "수서", "082000", "0830")
+
+    assert [train.name for train in trains] == ["in-window"]
 
 
 def test_srt_search_can_include_unavailable_trains_for_target_summary():
