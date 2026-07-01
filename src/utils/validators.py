@@ -1,6 +1,6 @@
 """Input validation utilities."""
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Tuple, Optional
 
 
@@ -54,6 +54,36 @@ class InputValidator:
             return False, "전화번호는 숫자와 '-'만 포함해야 합니다."
 
         return True, None
+
+    @staticmethod
+    def normalize_date_input(date_str: str) -> str:
+        """
+        Convert date shortcuts to YYYYMMDD.
+
+        Supported shortcuts:
+        - 오늘, 0, today: today
+        - 내일, 1, tomorrow: tomorrow
+        - 모레, 2: the day after tomorrow
+        """
+        if date_str is None:
+            return date_str
+
+        normalized = date_str.strip().lower()
+        offsets = {
+            "오늘": 0,
+            "0": 0,
+            "today": 0,
+            "내일": 1,
+            "1": 1,
+            "tomorrow": 1,
+            "모레": 2,
+            "2": 2,
+        }
+
+        if normalized not in offsets:
+            return date_str.strip()
+
+        return (datetime.today() + timedelta(days=offsets[normalized])).strftime("%Y%m%d")
 
     @staticmethod
     def validate_date(date_str: str) -> Tuple[bool, Optional[str]]:

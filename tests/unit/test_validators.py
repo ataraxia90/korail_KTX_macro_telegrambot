@@ -52,6 +52,25 @@ class TestPhoneNumberValidation:
 class TestDateValidation:
     """Test date validation."""
 
+    def test_normalize_date_shortcuts(self):
+        """Test relative date shortcuts."""
+        today = datetime.now().strftime("%Y%m%d")
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y%m%d")
+        day_after_tomorrow = (datetime.now() + timedelta(days=2)).strftime("%Y%m%d")
+
+        assert InputValidator.normalize_date_input("오늘") == today
+        assert InputValidator.normalize_date_input("0") == today
+        assert InputValidator.normalize_date_input("today") == today
+        assert InputValidator.normalize_date_input("내일") == tomorrow
+        assert InputValidator.normalize_date_input("1") == tomorrow
+        assert InputValidator.normalize_date_input("tomorrow") == tomorrow
+        assert InputValidator.normalize_date_input("모레") == day_after_tomorrow
+        assert InputValidator.normalize_date_input("2") == day_after_tomorrow
+
+    def test_normalize_date_keeps_yyyymmdd(self):
+        """Test normal date strings are preserved."""
+        assert InputValidator.normalize_date_input(" 20991231 ") == "20991231"
+
     def test_valid_future_date(self):
         """Test valid future date."""
         future_date = (datetime.now() + timedelta(days=7)).strftime("%Y%m%d")

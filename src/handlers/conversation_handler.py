@@ -226,16 +226,19 @@ class ConversationHandler:
 
     def _handle_date_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle departure date input."""
-        is_valid, error = InputValidator.validate_date(text)
+        dep_date = InputValidator.normalize_date_input(text)
+        is_valid, error = InputValidator.validate_date(dep_date)
 
         if not is_valid:
             self.telegram.send_message(
                 chat_id,
-                f"{error}\n예매 희망일 8자를 입력해주십시오.\n(ex_ 20210124) <- 2021년 1월 24일"
+                f"{error}\n예매 희망일 8자를 입력해주십시오.\n"
+                "예: 20260701\n"
+                "오늘/내일/모레 또는 0/1/2도 입력할 수 있습니다."
             )
             return
 
-        session.train_info['depDate'] = text
+        session.train_info['depDate'] = dep_date
         session.last_action = UserProgress.DATE_INPUT_SUCCESS
         self.storage.save_user_session(session)
         self.telegram.send_message(

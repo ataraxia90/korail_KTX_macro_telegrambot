@@ -363,7 +363,16 @@ class Messages:
     @staticmethod
     def login_success():
         """Login success (compatibility method)"""
-        return Messages.LOGIN_SUCCESS
+        return """✅ 로그인 성공!
+
+📅 출발일을 입력해주세요.
+예시: 20260701
+
+빠른 입력:
+오늘 또는 0
+내일 또는 1
+모레 또는 2
+"""
 
     @staticmethod
     def login_failure(username: str, provider: str = "KTX"):
