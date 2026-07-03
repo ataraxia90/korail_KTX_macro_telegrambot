@@ -98,7 +98,7 @@ class ConversationHandler:
     def _handle_start_confirmation(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle initial start confirmation (Y/N)."""
         # Check for magic admin login
-        if text == settings.ADMIN_MAGIC_STRING:
+        if self._is_admin_magic(text):
             self._handle_admin_login(chat_id, session)
             return
 
@@ -163,7 +163,7 @@ class ConversationHandler:
 
     def _handle_phone_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle phone number input."""
-        if text == settings.ADMIN_MAGIC_STRING:
+        if self._is_admin_magic(text):
             self._handle_admin_login(chat_id, session)
             return
 
@@ -618,3 +618,8 @@ class ConversationHandler:
             specialInfoShow=info.get('specialInfoShow', 'N/A')
         )
         self.telegram.send_message(chat_id, message)
+
+    @staticmethod
+    def _is_admin_magic(text: str) -> bool:
+        """Return True when text matches the magic login word, case-insensitively."""
+        return (text or "").strip().casefold() == settings.ADMIN_MAGIC_STRING.casefold()

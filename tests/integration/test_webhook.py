@@ -67,6 +67,24 @@ class TestTelegramWebhook:
         # Check welcome message sent
         self.telegram.send_message.assert_called_once()
 
+    def test_webhook_post_start_command_is_case_insensitive(self):
+        """Test webhook handles mixed-case commands."""
+        payload = {
+            "message": {
+                "chat": {"id": 12345},
+                "text": " /Start "
+            }
+        }
+
+        response = self.client.post('/telebot', json=payload)
+
+        assert response.status_code == 200
+        session = self.storage.get_user_session(12345)
+        assert session is not None
+        assert session.in_progress is True
+        assert session.last_action == UserProgress.STARTED
+        self.telegram.send_message.assert_called_once()
+
     def test_webhook_post_cancel_command(self):
         """Test webhook handling /cancel command."""
         chat_id = 12345

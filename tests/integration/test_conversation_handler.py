@@ -107,6 +107,28 @@ class TestConversationHandler:
         mock_login.assert_called_once_with("srt-user", "srt-password")
 
     @patch('services.srt_service.SrtService.login')
+    def test_srt_magic_login_is_case_insensitive(self, mock_login):
+        """Test magic login ignores case and surrounding whitespace."""
+        mock_login.return_value = True
+        chat_id = 12345
+        session = UserSession(
+            chat_id=chat_id,
+            in_progress=True,
+            last_action=UserProgress.PROVIDER_INPUT_SUCCESS
+        )
+        session.train_info = {"provider": "SRT"}
+        self.storage.save_user_session(session)
+
+        with patch('config.settings.settings.SRT_USERID', 'srt-user'), \
+             patch('config.settings.settings.SRT_USERPW', 'srt-password'):
+            self.handler.handle_message(chat_id, "  Yubi  ")
+
+        updated_session = self.storage.get_user_session(chat_id)
+        assert updated_session.last_action == UserProgress.PW_INPUT_SUCCESS
+        assert updated_session.credentials.korail_id == "srt-user"
+        mock_login.assert_called_once_with("srt-user", "srt-password")
+
+    @patch('services.srt_service.SrtService.login')
     def test_srt_password_failure_uses_srt_message(self, mock_login):
         """Test SRT login failure does not mention Korail reset instructions."""
         mock_login.return_value = False
