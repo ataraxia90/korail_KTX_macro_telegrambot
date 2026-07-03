@@ -248,13 +248,15 @@ class ConversationHandler:
 
     def _handle_src_station_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle source station input."""
-        is_valid, error = InputValidator.validate_station_name(text)
+        provider = session.train_info.get("provider", "KTX")
+        station = InputValidator.normalize_station_input(text, provider)
+        is_valid, error = InputValidator.validate_station_name(station)
 
         if not is_valid:
-            self.telegram.send_message(chat_id, error)
+            self.telegram.send_message(chat_id, f"{error}\n{InputValidator.station_shortcut_help(provider)}")
             return
 
-        session.train_info['srcLocate'] = text
+        session.train_info['srcLocate'] = station
         session.last_action = UserProgress.SRC_LOCATE_INPUT_SUCCESS
         self.storage.save_user_session(session)
         self.telegram.send_message(
@@ -264,13 +266,15 @@ class ConversationHandler:
 
     def _handle_dst_station_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle destination station input."""
-        is_valid, error = InputValidator.validate_station_name(text)
+        provider = session.train_info.get("provider", "KTX")
+        station = InputValidator.normalize_station_input(text, provider)
+        is_valid, error = InputValidator.validate_station_name(station)
 
         if not is_valid:
-            self.telegram.send_message(chat_id, error)
+            self.telegram.send_message(chat_id, f"{error}\n{InputValidator.station_shortcut_help(provider)}")
             return
 
-        session.train_info['dstLocate'] = text
+        session.train_info['dstLocate'] = station
         session.last_action = UserProgress.DST_LOCATE_INPUT_SUCCESS
         self.storage.save_user_session(session)
 

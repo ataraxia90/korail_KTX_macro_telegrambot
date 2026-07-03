@@ -1,10 +1,11 @@
 """Unit tests for SRT service wrapper."""
 from types import SimpleNamespace
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta, timezone
 
 from services.srt_service import SrtService
 from services import srt_service
+
+KST = timezone(timedelta(hours=9), name="KST")
 
 
 class FakeSeatType:
@@ -154,7 +155,7 @@ def test_srt_search_can_include_unavailable_trains_for_target_summary():
 def test_srt_loop_stops_after_last_target_train_departure():
     service = SrtService(srt_cls=FakeSRTWithExpiredTarget, seat_type_cls=FakeSeatType, adult_cls=FakeAdult)
     service.login("user", "ok")
-    service._now_kst = lambda: datetime(2026, 7, 1, 15, 21, tzinfo=ZoneInfo("Asia/Seoul"))
+    service._now_kst = lambda: datetime(2026, 7, 1, 15, 21, tzinfo=KST)
 
     reservation = service.search_and_reserve_loop(
         dep_date="20260701",

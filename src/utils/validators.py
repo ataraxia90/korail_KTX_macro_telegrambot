@@ -86,6 +86,34 @@ class InputValidator:
         return (datetime.today() + timedelta(days=offsets[normalized])).strftime("%Y%m%d")
 
     @staticmethod
+    def normalize_station_input(station: str, provider: str = "KTX") -> str:
+        """Convert provider-specific station shortcuts to station names."""
+        if station is None:
+            return station
+
+        normalized = station.strip()
+        provider = (provider or "KTX").upper()
+        shortcuts = {
+            "KTX": {
+                "1": "대전",
+                "2": "서울",
+            },
+            "SRT": {
+                "1": "대전",
+                "2": "수서",
+            },
+        }
+
+        return shortcuts.get(provider, shortcuts["KTX"]).get(normalized, normalized)
+
+    @staticmethod
+    def station_shortcut_help(provider: str = "KTX") -> str:
+        """Return a user-facing station shortcut hint."""
+        if (provider or "KTX").upper() == "SRT":
+            return "빠른 입력: 1. 대전  2. 수서"
+        return "빠른 입력: 1. 대전  2. 서울"
+
+    @staticmethod
     def validate_date(date_str: str) -> Tuple[bool, Optional[str]]:
         """
         Validate date in YYYYMMDD format with enhanced validation.

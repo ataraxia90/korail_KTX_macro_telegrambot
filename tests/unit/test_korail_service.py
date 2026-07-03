@@ -1,9 +1,10 @@
 """Unit tests for Korail service safeguards."""
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta, timezone
 
 from services.korail_service import KorailService
+
+KST = timezone(timedelta(hours=9), name="KST")
 
 
 class FakeKorailTrain:
@@ -66,7 +67,7 @@ def test_korail_loop_stops_after_last_target_train_departure():
     service = KorailService()
     service._korail_instance = fake
     service._logged_in = True
-    service._now_kst = lambda: datetime(2026, 7, 1, 8, 26, tzinfo=ZoneInfo("Asia/Seoul"))
+    service._now_kst = lambda: datetime(2026, 7, 1, 8, 26, tzinfo=KST)
 
     reservation = service.search_and_reserve_loop(
         "20260701",

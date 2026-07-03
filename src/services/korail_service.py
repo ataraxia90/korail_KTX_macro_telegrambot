@@ -1,9 +1,9 @@
 """Korail API service wrapper."""
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from korail2 import (
     Korail as K2MKorail, TrainType, ReserveOption, SoldOutError, NoResultsError,
     AdultPassenger
@@ -596,14 +596,21 @@ class KorailService:
                 minute=minute,
                 second=0,
                 microsecond=0,
-                tzinfo=ZoneInfo("Asia/Seoul")
+                tzinfo=self._kst_timezone()
             )
         except ValueError:
             return None
 
     def _now_kst(self) -> datetime:
         """Current time in Asia/Seoul."""
-        return datetime.now(ZoneInfo("Asia/Seoul"))
+        return datetime.now(self._kst_timezone())
+
+    def _kst_timezone(self):
+        """Return Asia/Seoul timezone, falling back to fixed UTC+9 on Windows."""
+        try:
+            return ZoneInfo("Asia/Seoul")
+        except ZoneInfoNotFoundError:
+            return timezone(timedelta(hours=9), name="KST")
 
     def _cancel_reservations(self, reservations: List) -> None:
         """Cancel a list of reservations (cleanup for failed random allocation)."""

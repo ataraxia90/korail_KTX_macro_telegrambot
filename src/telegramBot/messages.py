@@ -385,15 +385,55 @@ class Messages:
     def request_departure_station(provider: str = "KTX"):
         """Request departure station after date input (compatibility method)"""
         if provider.upper() == "SRT":
-            return Messages.REQUEST_SRT_DATE
-        return Messages.REQUEST_DATE
+            return """✅ 출발일 입력 완료
+
+🚉 출발역을 입력해주세요.
+예시: 대전, 수서
+
+빠른 입력:
+1. 대전
+2. 수서
+
+역 이름만 입력해주세요. 예: 대전
+"""
+        return """✅ 출발일 입력 완료
+
+🚉 출발역을 입력해주세요.
+예시: 대전, 서울
+
+빠른 입력:
+1. 대전
+2. 서울
+
+역 이름만 입력해주세요. 예: 대전
+"""
 
     @staticmethod
     def request_arrival_station(provider: str = "KTX"):
         """Request arrival station after departure station input (compatibility method)"""
         if provider.upper() == "SRT":
-            return Messages.REQUEST_SRT_SRC_STATION
-        return Messages.REQUEST_SRC_STATION
+            return """✅ 출발역 입력 완료
+
+🏁 도착역을 입력해주세요.
+예시: 대전, 수서
+
+빠른 입력:
+1. 대전
+2. 수서
+
+역 이름만 입력해주세요. 예: 수서
+"""
+        return """✅ 출발역 입력 완료
+
+🏁 도착역을 입력해주세요.
+예시: 대전, 서울
+
+빠른 입력:
+1. 대전
+2. 서울
+
+역 이름만 입력해주세요. 예: 서울
+"""
 
     @staticmethod
     def request_seat_type(provider: str = "KTX"):
