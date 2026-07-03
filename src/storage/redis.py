@@ -15,6 +15,44 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _serialize_search_params(search_params: Optional[TrainSearchParams]) -> Optional[dict]:
+    if not search_params:
+        return None
+    return {
+        "provider": search_params.provider,
+        "dep_date": search_params.dep_date,
+        "src_locate": search_params.src_locate,
+        "dst_locate": search_params.dst_locate,
+        "dep_time": search_params.dep_time,
+        "max_dep_time": search_params.max_dep_time,
+        "train_type": search_params.train_type,
+        "train_type_display": search_params.train_type_display,
+        "special_option": search_params.special_option,
+        "special_option_display": search_params.special_option_display,
+        "passenger_count": search_params.passenger_count,
+        "seat_strategy": search_params.seat_strategy,
+    }
+
+
+def _deserialize_search_params(data: Optional[dict]) -> Optional[TrainSearchParams]:
+    if not data:
+        return None
+    return TrainSearchParams(
+        provider=data.get("provider", "KTX"),
+        dep_date=data["dep_date"],
+        src_locate=data["src_locate"],
+        dst_locate=data["dst_locate"],
+        dep_time=data["dep_time"],
+        max_dep_time=data["max_dep_time"],
+        train_type=data["train_type"],
+        train_type_display=data.get("train_type_display", data.get("train_type", "KTX")),
+        special_option=data["special_option"],
+        special_option_display=data.get("special_option_display", data.get("special_option", "")),
+        passenger_count=data["passenger_count"],
+        seat_strategy=data["seat_strategy"],
+    )
+
+
 class RedisStorage(StorageInterface):
     """
     Redis-based storage implementation.
@@ -422,20 +460,8 @@ class RedisStorage(StorageInterface):
                 "korail_id": session.credentials.korail_id,
                 "korail_pw": session.credentials.korail_pw
             } if session.credentials else None,
-            "search_params": {
-                "provider": session.search_params.provider,
-                "dep_date": session.search_params.dep_date,
-                "src_locate": session.search_params.src_locate,
-                "dst_locate": session.search_params.dst_locate,
-                "dep_time": session.search_params.dep_time,
-                "max_dep_time": session.search_params.max_dep_time,
-                "train_type": session.search_params.train_type,
-                "train_type_display": session.search_params.train_type_display,
-                "special_option": session.search_params.special_option,
-                "special_option_display": session.search_params.special_option_display,
-                "passenger_count": session.search_params.passenger_count,
-                "seat_strategy": session.search_params.seat_strategy
-            } if session.search_params else None
+            "search_params": _serialize_search_params(session.search_params),
+            "last_search_params": _serialize_search_params(session.last_search_params)
         }
 
     def _deserialize_user_session(self, data: dict) -> UserSession:
@@ -448,23 +474,8 @@ class RedisStorage(StorageInterface):
                 korail_pw=c["korail_pw"]
             )
 
-        search_params = None
-        if data.get("search_params"):
-            p = data["search_params"]
-            search_params = TrainSearchParams(
-                provider=p.get("provider", "KTX"),
-                dep_date=p["dep_date"],
-                src_locate=p["src_locate"],
-                dst_locate=p["dst_locate"],
-                dep_time=p["dep_time"],
-                max_dep_time=p["max_dep_time"],
-                train_type=p["train_type"],
-                train_type_display=p["train_type_display"],
-                special_option=p["special_option"],
-                special_option_display=p["special_option_display"],
-                passenger_count=p["passenger_count"],
-                seat_strategy=p["seat_strategy"]
-            )
+        search_params = _deserialize_search_params(data.get("search_params"))
+        last_search_params = _deserialize_search_params(data.get("last_search_params"))
 
         return UserSession(
             chat_id=data["chat_id"],
@@ -473,7 +484,8 @@ class RedisStorage(StorageInterface):
             process_id=data.get("process_id", 9999999),
             train_info=data.get("train_info", {}),
             credentials=credentials,
-            search_params=search_params
+            search_params=search_params,
+            last_search_params=last_search_params
         )
 
     def _serialize_running_reservation(self, reservation: RunningReservation) -> dict:

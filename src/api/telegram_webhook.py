@@ -230,7 +230,10 @@ class TelegramWebhook(Resource):
 
                 # Reset user session
                 session = self.storage.get_user_session(chat_id)
+                running = self.storage.get_running_reservation(chat_id)
                 if session:
+                    if running:
+                        session.last_search_params = running.search_params
                     session.reset()
                     self.storage.save_user_session(session)
 

@@ -23,6 +23,7 @@ class UserSession:
     train_info: dict = field(default_factory=dict)
     process_id: int = 9999999  # PID of background reservation process
     search_params: Optional['TrainSearchParams'] = None  # Search parameters for train reservation
+    last_search_params: Optional['TrainSearchParams'] = None  # Last completed/started search for /repeat
 
     def reset(self) -> None:
         """Reset user session to initial state."""

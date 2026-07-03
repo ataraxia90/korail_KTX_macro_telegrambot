@@ -2,7 +2,7 @@
 from typing import Optional
 
 from config.settings import settings
-from models import UserSession, UserProgress, UserCredentials
+from models import UserSession, UserProgress, UserCredentials, TrainSearchParams
 from storage.base import StorageInterface
 from services import TelegramService, ReservationService, MessageTemplates, KorailService, PaymentReminderService
 from utils.logger import get_logger, LoggerFactory
@@ -123,6 +123,45 @@ class CommandHandler:
 
         status_message = self.reservation.get_status(chat_id)
         self.telegram.send_message(chat_id, status_message)
+
+    def handle_repeat(self, chat_id: int) -> None:
+        """Load the last reservation search and ask for confirmation."""
+        logger.info(f"Handling /repeat for chat_id={chat_id}")
+
+        if self.storage.get_running_reservation(chat_id):
+            self.telegram.send_message(chat_id, "이미 진행 중인 예약이 있습니다. /cancel 후 다시 시도해주세요.")
+            return
+
+        session = self.storage.get_user_session(chat_id)
+        if not session:
+            self.telegram.send_message(chat_id, "반복할 예약 조건이 없습니다. 먼저 /start로 예약 조건을 입력해주세요.")
+            return
+
+        params = session.last_search_params or session.search_params
+        if not params:
+            self.telegram.send_message(chat_id, "반복할 예약 조건이 없습니다. 먼저 한 번 예약 조건을 입력해주세요.")
+            return
+
+        if not session.credentials:
+            self.telegram.send_message(chat_id, "로그인 정보가 없습니다. /start로 다시 로그인해주세요.")
+            return
+
+        is_valid, error = params.validate()
+        if not is_valid:
+            self.telegram.send_message(
+                chat_id,
+                f"직전 예약 조건을 다시 사용할 수 없습니다.\n사유: {error}\n/start로 새 조건을 입력해주세요."
+            )
+            return
+
+        session.in_progress = True
+        session.last_action = UserProgress.SEAT_STRATEGY_INPUT_SUCCESS
+        session.train_info = self._train_info_from_search_params(params)
+        session.search_params = params
+        session.last_search_params = params
+        self.storage.save_user_session(session)
+
+        self.telegram.send_message(chat_id, self._build_repeat_confirmation(params))
 
     def handle_debug_on(self, chat_id: int) -> None:
         """
@@ -316,6 +355,8 @@ class CommandHandler:
             self.handle_cancel(chat_id)
         elif command == "/status":
             self.handle_status(chat_id)
+        elif command == "/repeat":
+            self.handle_repeat(chat_id)
         elif command == "/help":
             self.handle_help(chat_id)
         # Admin commands - require authentication
@@ -338,6 +379,46 @@ class CommandHandler:
             self.handle_unknown_command(chat_id, command)
 
         return True
+
+    def _train_info_from_search_params(self, params: TrainSearchParams) -> dict:
+        """Build conversation train_info from stored search params."""
+        seat_strategy_show = "연속 좌석" if params.seat_strategy == "consecutive" else "랜덤 배치"
+        return {
+            "provider": params.provider,
+            "depDate": params.dep_date,
+            "srcLocate": params.src_locate,
+            "dstLocate": params.dst_locate,
+            "depTime": params.dep_time,
+            "maxDepTime": params.max_dep_time,
+            "trainType": params.train_type,
+            "trainTypeShow": params.train_type_display,
+            "specialInfo": params.special_option,
+            "specialInfoShow": params.special_option_display,
+            "passengerCount": params.passenger_count,
+            "seatStrategy": params.seat_strategy,
+            "seatStrategyShow": seat_strategy_show,
+            "targetTrains": "직전 조건 그대로",
+        }
+
+    def _build_repeat_confirmation(self, params: TrainSearchParams) -> str:
+        """Build confirmation text for a repeated reservation."""
+        from telegramBot.messages import Messages
+
+        seat_strategy_show = "연속 좌석" if params.seat_strategy == "consecutive" else "랜덤 배치"
+        summary = Messages.CONFIRM_RESERVATION.format(
+            provider=params.provider,
+            depDate=params.dep_date,
+            srcLocate=params.src_locate,
+            dstLocate=params.dst_locate,
+            depTime=params.dep_time[:4],
+            maxDepTime=params.max_dep_time,
+            targetTrains="직전 조건 그대로",
+            trainTypeShow=params.train_type_display,
+            specialInfoShow=params.special_option_display,
+            passengerCount=params.passenger_count,
+            seatStrategy=seat_strategy_show,
+        )
+        return f"🔁 직전 예약 조건을 불러왔습니다.\n\n{summary}"
 
     def _handle_admin_command(self, chat_id: int, handler_func, command_name: str = "") -> None:
         """

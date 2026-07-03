@@ -111,6 +111,8 @@ class ReservationService:
             session = self.storage.get_user_session(chat_id)
             if session:
                 session.process_id = proc.pid
+                session.search_params = search_params
+                session.last_search_params = search_params
                 self.storage.save_user_session(session)
 
             # Notify subscribers
@@ -157,6 +159,7 @@ class ReservationService:
             # Reset user session
             session = self.storage.get_user_session(chat_id)
             if session:
+                session.last_search_params = reservation.search_params
                 session.reset()
                 self.storage.save_user_session(session)
 
@@ -199,6 +202,7 @@ class ReservationService:
                 # Reset session
                 session = self.storage.get_user_session(reservation.chat_id)
                 if session:
+                    session.last_search_params = reservation.search_params
                     session.reset()
                     self.storage.save_user_session(session)
 

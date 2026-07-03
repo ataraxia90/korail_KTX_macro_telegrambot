@@ -584,6 +584,8 @@ class ConversationHandler:
         )
 
         # Update session
+        session.search_params = search_params
+        session.last_search_params = search_params
         session.last_action = UserProgress.FINDING_TICKET
         self.storage.save_user_session(session)
 
