@@ -84,10 +84,15 @@ class ReservationService:
 
             # Start background process
             module_name = (
+                'telegramBot.srtSplitBackProcess'
+                if search_params.provider.upper() == "SRT" and search_params.split_enabled
+                else
                 'telegramBot.srtBackProcess'
                 if search_params.provider.upper() == "SRT"
                 else 'telegramBot.telebotBackProcess'
             )
+            if search_params.split_enabled and search_params.split_via_station:
+                arguments.append(search_params.split_via_station)
             src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             proc = subprocess.Popen(
                 [sys.executable, '-m', module_name] + arguments,
@@ -237,16 +242,24 @@ class ReservationService:
         if count == 0:
             return "진행 중인 예약이 없습니다."
 
-        details = [
-            (
-                f"{r.search_params.provider.upper()} {r.korail_id}: "
-                f"{r.search_params.src_locate}->{r.search_params.dst_locate} "
-                f"{r.search_params.dep_date} {r.search_params.dep_time[:4]}"
-            )
-            for r in reservations
-        ]
+        details = [self._format_running_reservation(r) for r in reservations]
 
         return f"총 {count}개의 예약이 실행중입니다. 이용중인 예약: {details}"
+
+    def _format_running_reservation(self, reservation: RunningReservation) -> str:
+        """Format running reservation for status output."""
+        params = reservation.search_params
+        route = f"{params.src_locate}->{params.dst_locate}"
+        if params.split_enabled and params.split_via_station:
+            route = (
+                f"분할 {params.src_locate}->{params.split_via_station}, "
+                f"{params.split_via_station}->{params.dst_locate}"
+            )
+
+        return (
+            f"{params.provider.upper()} {reservation.korail_id}: "
+            f"{route} {params.dep_date} {params.dep_time[:4]}"
+        )
 
     def _notify_subscribers_start(self, username: str, params: TrainSearchParams) -> None:
         """Notify subscribers about reservation start."""

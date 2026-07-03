@@ -31,6 +31,9 @@ def _serialize_search_params(search_params: Optional[TrainSearchParams]) -> Opti
         "special_option_display": search_params.special_option_display,
         "passenger_count": search_params.passenger_count,
         "seat_strategy": search_params.seat_strategy,
+        "split_enabled": search_params.split_enabled,
+        "split_via_station": search_params.split_via_station,
+        "split_mode": search_params.split_mode,
     }
 
 
@@ -50,6 +53,9 @@ def _deserialize_search_params(data: Optional[dict]) -> Optional[TrainSearchPara
         special_option_display=data.get("special_option_display", data.get("special_option", "")),
         passenger_count=data["passenger_count"],
         seat_strategy=data["seat_strategy"],
+        split_enabled=data.get("split_enabled", False),
+        split_via_station=data.get("split_via_station"),
+        split_mode=data.get("split_mode", "none"),
     )
 
 
@@ -504,7 +510,10 @@ class RedisStorage(StorageInterface):
                 "train_type": reservation.search_params.train_type,
                 "special_option": reservation.search_params.special_option,
                 "passenger_count": reservation.search_params.passenger_count,
-                "seat_strategy": reservation.search_params.seat_strategy
+                "seat_strategy": reservation.search_params.seat_strategy,
+                "split_enabled": reservation.search_params.split_enabled,
+                "split_via_station": reservation.search_params.split_via_station,
+                "split_mode": reservation.search_params.split_mode,
             }
         }
 
@@ -521,7 +530,10 @@ class RedisStorage(StorageInterface):
             train_type=p["train_type"],
             special_option=p["special_option"],
             passenger_count=p["passenger_count"],
-            seat_strategy=p["seat_strategy"]
+            seat_strategy=p["seat_strategy"],
+            split_enabled=p.get("split_enabled", False),
+            split_via_station=p.get("split_via_station"),
+            split_mode=p.get("split_mode", "none")
         )
 
         return RunningReservation(

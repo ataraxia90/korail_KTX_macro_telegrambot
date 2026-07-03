@@ -20,6 +20,9 @@ class TrainSearchParams:
     special_option_display: str = "GENERAL_FIRST"
     passenger_count: int = 1  # Number of adult passengers (1-9)
     seat_strategy: str = "consecutive"  # "consecutive" or "random"
+    split_enabled: bool = False
+    split_via_station: Optional[str] = None
+    split_mode: str = "none"  # "none" or "manual"
 
     def validate(self) -> tuple[bool, Optional[str]]:
         """
@@ -30,6 +33,14 @@ class TrainSearchParams:
         """
         if self.provider.upper() not in ("KTX", "SRT"):
             return False, "provider must be KTX or SRT"
+
+        if self.split_enabled:
+            if self.provider.upper() != "SRT":
+                return False, "split reservation is currently supported for SRT only"
+            if not self.split_via_station:
+                return False, "split_via_station is required when split reservation is enabled"
+            if self.split_via_station in (self.src_locate, self.dst_locate):
+                return False, "split_via_station must differ from departure and arrival stations"
 
         # Validate date format
         if not self.dep_date.isdigit() or len(self.dep_date) != 8:

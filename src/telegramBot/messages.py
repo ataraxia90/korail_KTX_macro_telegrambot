@@ -453,6 +453,30 @@ class Messages:
         return Messages.RESERVATION_STARTED
 
     @staticmethod
+    def request_split_option():
+        """Ask whether to use split reservation."""
+        return """분할 예매를 시도할까요?
+
+1. 아니오, 직통만 검색
+2. 예, 경유역을 입력해서 2구간으로 검색
+
+숫자 1 또는 2를 입력해주세요.
+"""
+
+    @staticmethod
+    def request_split_via_station():
+        """Ask for split via station."""
+        return """분할 경유역을 입력해주세요.
+
+예: 평택지제
+
+입력한 경유역 기준으로
+1구간: 출발역 -> 경유역
+2구간: 경유역 -> 도착역
+을 동시에 검색합니다.
+"""
+
+    @staticmethod
     def reservation_cancelled():
         """Reservation cancelled (compatibility method)"""
         return Messages.CANCELLED

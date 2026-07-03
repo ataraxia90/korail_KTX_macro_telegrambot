@@ -398,6 +398,9 @@ class CommandHandler:
             "passengerCount": params.passenger_count,
             "seatStrategy": params.seat_strategy,
             "seatStrategyShow": seat_strategy_show,
+            "splitEnabled": params.split_enabled,
+            "splitViaStation": params.split_via_station,
+            "splitMode": params.split_mode,
             "targetTrains": "직전 조건 그대로",
         }
 
@@ -419,6 +422,13 @@ class CommandHandler:
             passengerCount=params.passenger_count,
             seatStrategy=seat_strategy_show,
         )
+        if params.split_enabled and params.split_via_station:
+            summary = (
+                f"{summary}\n\n"
+                "분할 예매: 사용\n"
+                f"1구간: {params.src_locate} -> {params.split_via_station}\n"
+                f"2구간: {params.split_via_station} -> {params.dst_locate}"
+            )
         return f"🔁 직전 예약 조건을 불러왔습니다.\n\n{summary}"
 
     def _handle_admin_command(self, chat_id: int, handler_func, command_name: str = "") -> None:

@@ -224,6 +224,18 @@ class TelegramWebhook(Resource):
                 # User will send payment confirmation which will be handled by POST webhook
                 return make_response("OK")
 
+            if str(status) == "1":
+                logger.info(f"Reservation process failed or ended for chat_id={chat_id}")
+                session = self.storage.get_user_session(chat_id)
+                running = self.storage.get_running_reservation(chat_id)
+                if session:
+                    if running:
+                        session.last_search_params = running.search_params
+                    session.reset()
+                    self.storage.save_user_session(session)
+                self.storage.delete_running_reservation(chat_id)
+                return make_response("OK")
+
             # If reservation successful (status == 0)
             if str(status) == "0":
                 logger.info(f"Reservation successful for chat_id={chat_id}")

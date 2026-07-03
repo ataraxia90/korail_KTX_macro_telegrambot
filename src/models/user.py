@@ -55,3 +55,5 @@ class UserProgress:
     SEAT_STRATEGY_INPUT_SUCCESS = 13  # New: seat allocation strategy
     FINDING_TICKET = 14  # Updated from 12 to 14
     PROVIDER_INPUT_SUCCESS = 15  # KTX/SRT provider selected
+    AWAITING_SPLIT_OPTION = 16
+    AWAITING_SPLIT_VIA_STATION = 17

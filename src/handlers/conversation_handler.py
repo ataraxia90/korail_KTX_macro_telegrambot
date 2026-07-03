@@ -86,6 +86,10 @@ class ConversationHandler:
             self._handle_passenger_count_input(chat_id, text, session)
         elif progress == UserProgress.PASSENGER_COUNT_INPUT_SUCCESS:
             self._handle_seat_strategy_input(chat_id, text, session)
+        elif progress == UserProgress.AWAITING_SPLIT_OPTION:
+            self._handle_split_option_input(chat_id, text, session)
+        elif progress == UserProgress.AWAITING_SPLIT_VIA_STATION:
+            self._handle_split_via_station_input(chat_id, text, session)
         elif progress == UserProgress.SEAT_STRATEGY_INPUT_SUCCESS:
             self._handle_final_confirmation(chat_id, text, session)
         else:
@@ -394,9 +398,8 @@ class ConversationHandler:
         else:
             # Single passenger, skip seat strategy
             session.train_info['seatStrategy'] = 'consecutive'
-            session.last_action = UserProgress.SEAT_STRATEGY_INPUT_SUCCESS
-            self.storage.save_user_session(session)
-            self._show_final_confirmation(chat_id, session)
+            session.train_info['seatStrategyShow'] = '1명'
+            self._ask_split_option_or_show_final_confirmation(chat_id, session)
 
     def _handle_seat_strategy_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle seat strategy selection."""
@@ -412,9 +415,64 @@ class ConversationHandler:
 
         session.train_info['seatStrategy'] = strategy
         session.train_info['seatStrategyShow'] = strategy_display
+
+        self._ask_split_option_or_show_final_confirmation(chat_id, session)
+
+    def _ask_split_option_or_show_final_confirmation(self, chat_id: int, session: UserSession) -> None:
+        """Ask SRT users about split reservation, otherwise show final confirmation."""
+        if session.train_info.get("provider", "KTX").upper() == "SRT":
+            session.last_action = UserProgress.AWAITING_SPLIT_OPTION
+            self.storage.save_user_session(session)
+            from telegramBot.messages import Messages
+            self.telegram.send_message(chat_id, Messages.request_split_option())
+            return
+
+        session.train_info['splitEnabled'] = False
+        session.train_info['splitMode'] = 'none'
         session.last_action = UserProgress.SEAT_STRATEGY_INPUT_SUCCESS
         self.storage.save_user_session(session)
+        self._show_final_confirmation(chat_id, session)
 
+    def _handle_split_option_input(self, chat_id: int, text: str, session: UserSession) -> None:
+        """Handle split reservation option selection."""
+        choice = (text or "").strip()
+        if choice not in ("1", "2"):
+            self.telegram.send_message(chat_id, "1(직통만 검색) 또는 2(분할 예매)를 입력해주세요.")
+            return
+
+        if choice == "1":
+            session.train_info['splitEnabled'] = False
+            session.train_info['splitMode'] = 'none'
+            session.train_info.pop('splitViaStation', None)
+            session.last_action = UserProgress.SEAT_STRATEGY_INPUT_SUCCESS
+            self.storage.save_user_session(session)
+            self._show_final_confirmation(chat_id, session)
+            return
+
+        session.train_info['splitEnabled'] = True
+        session.train_info['splitMode'] = 'manual'
+        session.last_action = UserProgress.AWAITING_SPLIT_VIA_STATION
+        self.storage.save_user_session(session)
+        from telegramBot.messages import Messages
+        self.telegram.send_message(chat_id, Messages.request_split_via_station())
+
+    def _handle_split_via_station_input(self, chat_id: int, text: str, session: UserSession) -> None:
+        """Handle manual split via station input."""
+        provider = session.train_info.get("provider", "SRT")
+        station = InputValidator.normalize_station_input(text, provider)
+        is_valid, error = InputValidator.validate_station_name(station)
+
+        if not is_valid:
+            self.telegram.send_message(chat_id, f"{error}\n{InputValidator.station_shortcut_help(provider)}")
+            return
+
+        if station in (session.train_info.get('srcLocate'), session.train_info.get('dstLocate')):
+            self.telegram.send_message(chat_id, "경유역은 출발역/도착역과 달라야 합니다. 다시 입력해주세요.")
+            return
+
+        session.train_info['splitViaStation'] = station
+        session.last_action = UserProgress.SEAT_STRATEGY_INPUT_SUCCESS
+        self.storage.save_user_session(session)
         self._show_final_confirmation(chat_id, session)
 
     def _show_final_confirmation(self, chat_id: int, session: UserSession) -> None:
@@ -426,6 +484,7 @@ class ConversationHandler:
         self.storage.save_user_session(session)
 
         from telegramBot.messages import Messages
+        split_summary = self._get_split_summary(session)
         summary = Messages.CONFIRM_RESERVATION.format(
             provider=session.train_info.get('provider', 'KTX'),
             depDate=session.train_info['depDate'],
@@ -439,7 +498,23 @@ class ConversationHandler:
             passengerCount=passenger_count,
             seatStrategy=seat_strategy_display
         )
+        if split_summary:
+            summary = f"{summary}\n\n{split_summary}"
         self.telegram.send_message(chat_id, summary)
+
+    def _get_split_summary(self, session: UserSession) -> str:
+        """Return split reservation summary for confirmation messages."""
+        if not session.train_info.get('splitEnabled'):
+            return ""
+
+        src = session.train_info.get('srcLocate', 'N/A')
+        via = session.train_info.get('splitViaStation', 'N/A')
+        dst = session.train_info.get('dstLocate', 'N/A')
+        return (
+            "분할 예매: 사용\n"
+            f"1구간: {src} -> {via}\n"
+            f"2구간: {via} -> {dst}"
+        )
 
     def _get_target_train_summary(self, session: UserSession) -> str:
         """Return a user-facing summary of trains matched by the current search criteria."""
@@ -580,7 +655,10 @@ class ConversationHandler:
             special_option=session.train_info['specialInfo'],
             special_option_display=session.train_info['specialInfoShow'],
             passenger_count=session.train_info.get('passengerCount', 1),
-            seat_strategy=session.train_info.get('seatStrategy', 'consecutive')
+            seat_strategy=session.train_info.get('seatStrategy', 'consecutive'),
+            split_enabled=session.train_info.get('splitEnabled', False),
+            split_via_station=session.train_info.get('splitViaStation'),
+            split_mode=session.train_info.get('splitMode', 'none')
         )
 
         # Update session
