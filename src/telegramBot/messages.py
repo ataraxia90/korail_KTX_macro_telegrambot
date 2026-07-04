@@ -383,54 +383,32 @@ class Messages:
 
     @staticmethod
     def request_departure_station(provider: str = "KTX"):
-        """Request departure station after date input (compatibility method)"""
-        if provider.upper() == "SRT":
-            return """✅ 출발일 입력 완료
-
-🚉 출발역을 입력해주세요.
-예시: 대전, 수서
-
-빠른 입력:
-1. 대전
-2. 수서
-
-역 이름만 입력해주세요. 예: 대전
-"""
+        """Request departure station with common KTX/SRT shortcuts."""
         return """✅ 출발일 입력 완료
 
 🚉 출발역을 입력해주세요.
-예시: 대전, 서울
+예시: 대전, 서울, 수서
 
 빠른 입력:
 1. 대전
 2. 서울
+3. 수서
 
 역 이름만 입력해주세요. 예: 대전
 """
 
     @staticmethod
     def request_arrival_station(provider: str = "KTX"):
-        """Request arrival station after departure station input (compatibility method)"""
-        if provider.upper() == "SRT":
-            return """✅ 출발역 입력 완료
-
-🏁 도착역을 입력해주세요.
-예시: 대전, 수서
-
-빠른 입력:
-1. 대전
-2. 수서
-
-역 이름만 입력해주세요. 예: 수서
-"""
+        """Request arrival station with common KTX/SRT shortcuts."""
         return """✅ 출발역 입력 완료
 
 🏁 도착역을 입력해주세요.
-예시: 대전, 서울
+예시: 대전, 서울, 수서
 
 빠른 입력:
 1. 대전
 2. 서울
+3. 수서
 
 역 이름만 입력해주세요. 예: 서울
 """

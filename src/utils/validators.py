@@ -87,31 +87,24 @@ class InputValidator:
 
     @staticmethod
     def normalize_station_input(station: str, provider: str = "KTX") -> str:
-        """Convert provider-specific station shortcuts to station names."""
+        """Convert common station shortcuts to station names."""
         if station is None:
             return station
 
         normalized = station.strip()
-        provider = (provider or "KTX").upper()
         shortcuts = {
-            "KTX": {
-                "1": "대전",
-                "2": "서울",
-            },
-            "SRT": {
-                "1": "대전",
-                "2": "수서",
-            },
+            "1": "대전",
+            "2": "서울",
+            "3": "수서",
         }
-
-        return shortcuts.get(provider, shortcuts["KTX"]).get(normalized, normalized)
+        if normalized in shortcuts:
+            return shortcuts[normalized]
+        return normalized
 
     @staticmethod
     def station_shortcut_help(provider: str = "KTX") -> str:
         """Return a user-facing station shortcut hint."""
-        if (provider or "KTX").upper() == "SRT":
-            return "빠른 입력: 1. 대전  2. 수서"
-        return "빠른 입력: 1. 대전  2. 서울"
+        return "빠른 입력: 1. 대전  2. 서울  3. 수서"
 
     @staticmethod
     def validate_date(date_str: str) -> Tuple[bool, Optional[str]]:

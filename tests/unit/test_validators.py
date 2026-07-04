@@ -207,11 +207,13 @@ class TestStationNameValidation:
         """Test KTX station shortcuts."""
         assert InputValidator.normalize_station_input("1", "KTX") == "대전"
         assert InputValidator.normalize_station_input("2", "KTX") == "서울"
+        assert InputValidator.normalize_station_input("3", "KTX") == "수서"
 
     def test_normalize_station_shortcuts_for_srt(self):
         """Test SRT station shortcuts."""
         assert InputValidator.normalize_station_input("1", "SRT") == "대전"
-        assert InputValidator.normalize_station_input("2", "SRT") == "수서"
+        assert InputValidator.normalize_station_input("2", "SRT") == "서울"
+        assert InputValidator.normalize_station_input("3", "SRT") == "수서"
 
     def test_normalize_station_keeps_station_name(self):
         """Test station names are preserved."""

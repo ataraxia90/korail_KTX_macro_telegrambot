@@ -445,6 +445,8 @@ class ConversationHandler:
         """Handle split reservation option selection."""
         choice = (text or "").strip()
         if choice not in ("1", "2", "3"):
+            self.telegram.send_message(chat_id, "1(직통만), 2(분할만), 3(직통+분할 병행) 중 하나를 입력해주세요.")
+            return
             self.telegram.send_message(chat_id, "1(직통만 검색) 또는 2(분할 예매)를 입력해주세요.")
             return
 
