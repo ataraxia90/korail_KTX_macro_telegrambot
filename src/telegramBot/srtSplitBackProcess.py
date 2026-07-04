@@ -1,5 +1,6 @@
 """Background process for SRT split and direct+split reservation."""
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from datetime import timedelta
 import os
 import re
 import sys
@@ -95,6 +96,10 @@ class SrtSplitBackgroundReservationProcess:
                     if result["success"]:
                         self._send_callback(result["message"], status=0, is_multi=(mode == "split"))
                         # End this background process immediately so the other worker stops too.
+                        os._exit(0)
+                    if result.get("partial"):
+                        self._send_callback(result["message"], status=1, is_multi=True)
+                        # A partial split reservation needs immediate user action.
                         os._exit(0)
 
         failure_message = self._build_combined_failure_message(results)
@@ -256,6 +261,18 @@ class SrtSplitBackgroundReservationProcess:
             }
 
         if first_reservation or second_reservation:
+            retry_result = self._retry_missing_split_segment_until_payment_deadline(
+                train_number=train_number,
+                first_reservation=first_reservation,
+                second_reservation=second_reservation,
+                first_service=first_service,
+                second_service=second_service,
+                seat_type1=seat_type1,
+                seat_type2=seat_type2,
+            )
+            if retry_result["success"]:
+                return retry_result
+
             logger.warning(
                 "SRT split same-train reservation partially succeeded: chat_id=%s, train_number=%s",
                 self.chat_id,
@@ -266,12 +283,122 @@ class SrtSplitBackgroundReservationProcess:
                 "partial": True,
                 "message": self._build_split_partial_failure_message(
                     train_number,
-                    first_reservation,
-                    second_reservation,
+                    retry_result["first_reservation"],
+                    retry_result["second_reservation"],
                 ),
             }
 
         return {"success": False, "message": "no reservation"}
+
+    def _retry_missing_split_segment_until_payment_deadline(
+        self,
+        train_number: str,
+        first_reservation,
+        second_reservation,
+        first_service: SrtService,
+        second_service: SrtService,
+        seat_type1,
+        seat_type2,
+    ) -> dict:
+        """Retry only the missing split segment until the first reservation payment deadline."""
+        deadline_at = first_service._now_kst() + timedelta(minutes=settings.PAYMENT_TIMEOUT_MINUTES)
+        logger.warning(
+            "SRT split partial reservation detected: chat_id=%s, train_number=%s, "
+            "first_reserved=%s, second_reserved=%s, retry_until=%s",
+            self.chat_id,
+            train_number,
+            bool(first_reservation),
+            bool(second_reservation),
+            deadline_at.strftime("%Y-%m-%d %H:%M:%S"),
+        )
+
+        while first_service._now_kst() < deadline_at:
+            if not first_reservation:
+                refreshed_first = self._find_train_by_number(
+                    service=first_service,
+                    train_number=train_number,
+                    src_locate=self.src_locate,
+                    dst_locate=self.via_station,
+                    dep_time=self.dep_time,
+                    max_dep_time=self.max_dep_time,
+                )
+                if refreshed_first:
+                    first_reservation = self._reserve_train_with_lock(
+                        first_service,
+                        refreshed_first,
+                        seat_type1,
+                        "1구간",
+                        train_number,
+                    )
+
+            if not second_reservation:
+                refreshed_second = self._find_train_by_number(
+                    service=second_service,
+                    train_number=train_number,
+                    src_locate=self.via_station,
+                    dst_locate=self.dst_locate,
+                    dep_time=self.dep_time,
+                    max_dep_time="2400",
+                )
+                if refreshed_second:
+                    second_reservation = self._reserve_train_with_lock(
+                        second_service,
+                        refreshed_second,
+                        seat_type2,
+                        "2구간",
+                        train_number,
+                    )
+
+            if first_reservation and second_reservation:
+                logger.info(
+                    "SRT split missing segment retry succeeded: chat_id=%s, train_number=%s",
+                    self.chat_id,
+                    train_number,
+                )
+                return {
+                    "success": True,
+                    "message": self._build_split_success_message(
+                        train_number,
+                        first_reservation,
+                        second_reservation,
+                    ),
+                }
+
+            time.sleep(settings.SRT_SEARCH_INTERVAL)
+
+        logger.warning(
+            "SRT split missing segment retry expired: chat_id=%s, train_number=%s, "
+            "first_reserved=%s, second_reserved=%s",
+            self.chat_id,
+            train_number,
+            bool(first_reservation),
+            bool(second_reservation),
+        )
+        return {
+            "success": False,
+            "first_reservation": first_reservation,
+            "second_reservation": second_reservation,
+        }
+
+    def _find_train_by_number(
+        self,
+        service: SrtService,
+        train_number: str,
+        src_locate: str,
+        dst_locate: str,
+        dep_time: str,
+        max_dep_time: str,
+    ):
+        trains = service.search_trains(
+            dep_date=self.dep_date,
+            src_locate=src_locate,
+            dst_locate=dst_locate,
+            dep_time=dep_time,
+            max_dep_time=max_dep_time,
+            passenger_count=self.passenger_count,
+            verbose=False,
+        )
+        return self._train_map(trains, {train_number}).get(train_number)
 
     def _reserve_train_with_lock(
         self,

@@ -1,4 +1,5 @@
 """Unit tests for SRT split reservation."""
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from handlers.conversation_handler import ConversationHandler
@@ -206,3 +207,75 @@ def test_srt_split_process_sends_success_callback_only_after_both_segments_succe
     assert params["status"] == 0
     assert FakeSplitSrtService.calls == ["362", "362"]
     assert "SRT362" in params["msg"]
+
+
+class FakePartialRetrySrtService:
+    instances = []
+    now = datetime(2099, 12, 31, 8, 25, tzinfo=timezone(timedelta(hours=9)))
+
+    def __init__(self):
+        self.index = len(self.instances)
+        self.reserve_attempts = 0
+        self.instances.append(self)
+
+    def login(self, username, password):
+        return True
+
+    def parse_seat_type(self, option):
+        return "seat-type"
+
+    def search_trains(self, src_locate, dst_locate, **kwargs):
+        return [Mock(train_no="362")]
+
+    def _get_search_cutoff_time(self, **kwargs):
+        return self.now + timedelta(minutes=30)
+
+    def _now_kst(self):
+        return self.now
+
+    def reserve_train(self, train, seat_type=None, passenger_count=1):
+        self.reserve_attempts += 1
+        if self.index == 1:
+            return "reserved:first"
+        if self.index == 2 and self.reserve_attempts >= 2:
+            return "reserved:second"
+        return None
+
+
+@patch("telegramBot.srtSplitBackProcess.sys.argv", [
+    "srtSplitBackProcess.py",
+    "user",
+    "password",
+    "20991231",
+    "Suseo",
+    "Daejeon",
+    "082500",
+    "SRT",
+    "ReserveOption.GENERAL_FIRST",
+    "12345",
+    "0830",
+    "1",
+    "consecutive",
+    "PyeongtaekJije",
+    "split_only",
+])
+@patch("telegramBot.srtSplitBackProcess.time.sleep", lambda seconds: None)
+@patch("telegramBot.srtSplitBackProcess.SrtService", FakePartialRetrySrtService)
+@patch("telegramBot.srtSplitBackProcess.requests.session")
+def test_srt_split_process_retries_missing_segment_until_payment_deadline(mock_session):
+    FakePartialRetrySrtService.instances = []
+    response = Mock()
+    response.status_code = 200
+    requester = Mock()
+    requester.get.return_value = response
+    mock_session.return_value = requester
+
+    process = SrtSplitBackgroundReservationProcess()
+    process.run()
+
+    requester.get.assert_called_once()
+    params = requester.get.call_args.kwargs["params"]
+    assert params["status"] == 0
+    assert "SRT362" in params["msg"]
+    assert FakePartialRetrySrtService.instances[1].reserve_attempts == 1
+    assert FakePartialRetrySrtService.instances[2].reserve_attempts == 2
