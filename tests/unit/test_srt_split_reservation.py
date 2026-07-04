@@ -82,7 +82,7 @@ def test_srt_conversation_collects_manual_split_station_and_starts_split_search(
     search_params = reservation.start_reservation_process.call_args.kwargs["search_params"]
     assert search_params.split_enabled is True
     assert search_params.split_via_station == "PyeongtaekJije"
-    assert search_params.split_mode == "manual"
+    assert search_params.split_mode == "split_only"
 
 
 def test_srt_split_compatibility_rejects_via_station_without_matching_train():
@@ -137,14 +137,14 @@ def test_reservation_service_uses_srt_split_process_when_enabled(mock_popen):
         seat_strategy="consecutive",
         split_enabled=True,
         split_via_station="PyeongtaekJije",
-        split_mode="manual",
+        split_mode="split_only",
     )
 
     assert service.start_reservation_process(12345, "user", "password", params) is True
 
     popen_args = mock_popen.call_args.args[0]
     assert popen_args[1:3] == ["-m", "telegramBot.srtSplitBackProcess"]
-    assert popen_args[-1] == "PyeongtaekJije"
+    assert popen_args[-2:] == ["PyeongtaekJije", "split_only"]
     assert storage.running.search_params.split_enabled is True
 
 
@@ -160,9 +160,15 @@ class FakeSplitSrtService:
     def search_trains(self, src_locate, dst_locate, **kwargs):
         return [Mock(train_no="362")]
 
-    def search_and_reserve_loop(self, **kwargs):
-        self.calls.append(kwargs)
-        return f"reserved:{kwargs['src_locate']}->{kwargs['dst_locate']}"
+    def _get_search_cutoff_time(self, **kwargs):
+        return None
+
+    def _now_kst(self):
+        return None
+
+    def reserve_train(self, train, seat_type=None, passenger_count=1):
+        self.calls.append(train.train_no)
+        return f"reserved:{train.train_no}"
 
 
 @patch("telegramBot.srtSplitBackProcess.sys.argv", [
@@ -180,6 +186,7 @@ class FakeSplitSrtService:
     "1",
     "consecutive",
     "PyeongtaekJije",
+    "split_only",
 ])
 @patch("telegramBot.srtSplitBackProcess.SrtService", FakeSplitSrtService)
 @patch("telegramBot.srtSplitBackProcess.requests.session")
@@ -197,6 +204,5 @@ def test_srt_split_process_sends_success_callback_only_after_both_segments_succe
     requester.get.assert_called_once()
     params = requester.get.call_args.kwargs["params"]
     assert params["status"] == 0
-    assert all(call["target_train_numbers"] == {"SRT362"} for call in FakeSplitSrtService.calls)
-    assert "reserved:Suseo->PyeongtaekJije" in params["msg"]
-    assert "reserved:PyeongtaekJije->Daejeon" in params["msg"]
+    assert FakeSplitSrtService.calls == ["362", "362"]
+    assert "SRT362" in params["msg"]

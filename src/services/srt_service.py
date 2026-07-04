@@ -137,7 +137,8 @@ class SrtService:
         seat_type=None,
         passenger_count: int = 1,
         max_attempts: Optional[int] = None,
-        target_train_numbers: Optional[set[str]] = None
+        target_train_numbers: Optional[set[str]] = None,
+        reserve_lock=None
     ):
         """Search and reserve until successful."""
         attempts = 0
@@ -180,7 +181,19 @@ class SrtService:
                 ]
 
             for train in trains:
-                reservation = self.reserve_train(train, seat_type=seat_type, passenger_count=passenger_count)
+                if reserve_lock:
+                    with reserve_lock:
+                        reservation = self.reserve_train(
+                            train,
+                            seat_type=seat_type,
+                            passenger_count=passenger_count
+                        )
+                else:
+                    reservation = self.reserve_train(
+                        train,
+                        seat_type=seat_type,
+                        passenger_count=passenger_count
+                    )
                 if reservation:
                     return reservation
 

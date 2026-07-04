@@ -93,6 +93,7 @@ class ReservationService:
             )
             if search_params.split_enabled and search_params.split_via_station:
                 arguments.append(search_params.split_via_station)
+                arguments.append(search_params.split_mode)
             src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             logger.info(
                 "Starting reservation subprocess: chat_id=%s, module=%s, "

@@ -22,7 +22,7 @@ class TrainSearchParams:
     seat_strategy: str = "consecutive"  # "consecutive" or "random"
     split_enabled: bool = False
     split_via_station: Optional[str] = None
-    split_mode: str = "none"  # "none" or "manual"
+    split_mode: str = "none"  # "none", "split_only", "direct_and_split", or legacy "manual"
 
     def validate(self) -> tuple[bool, Optional[str]]:
         """
@@ -41,6 +41,8 @@ class TrainSearchParams:
                 return False, "split_via_station is required when split reservation is enabled"
             if self.split_via_station in (self.src_locate, self.dst_locate):
                 return False, "split_via_station must differ from departure and arrival stations"
+            if self.split_mode not in ("split_only", "direct_and_split", "manual"):
+                return False, "split_mode must be split_only or direct_and_split"
 
         # Validate date format
         if not self.dep_date.isdigit() or len(self.dep_date) != 8:

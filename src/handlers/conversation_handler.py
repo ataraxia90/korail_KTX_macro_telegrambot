@@ -16,6 +16,14 @@ logger = get_logger(__name__)
 class ConversationHandler:
     """Handles multi-step conversation flow for train reservation."""
 
+    SRT_SPLIT_ROUTES = [
+        ["수서", "동탄", "평택지제", "천안아산", "오송", "대전", "김천구미", "동대구", "경주", "울산", "부산"],
+        ["수서", "동탄", "평택지제", "천안아산", "오송", "공주", "익산", "정읍", "광주송정", "나주", "목포"],
+        ["수서", "동탄", "평택지제", "천안아산", "오송", "공주", "익산", "전주", "남원", "곡성", "구례구", "순천", "여천", "여수엑스포"],
+        ["수서", "동탄", "평택지제", "천안아산", "오송", "진영", "창원중앙", "창원", "마산", "진주"],
+        ["수서", "동탄", "평택지제", "천안아산", "오송", "서대구", "동대구", "밀양", "구포", "부산"],
+    ]
+
     def __init__(
         self,
         storage: StorageInterface,
@@ -436,7 +444,7 @@ class ConversationHandler:
     def _handle_split_option_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle split reservation option selection."""
         choice = (text or "").strip()
-        if choice not in ("1", "2"):
+        if choice not in ("1", "2", "3"):
             self.telegram.send_message(chat_id, "1(직통만 검색) 또는 2(분할 예매)를 입력해주세요.")
             return
 
@@ -450,16 +458,82 @@ class ConversationHandler:
             return
 
         session.train_info['splitEnabled'] = True
-        session.train_info['splitMode'] = 'manual'
+        session.train_info['splitMode'] = 'split_only' if choice == "2" else 'direct_and_split'
         session.last_action = UserProgress.AWAITING_SPLIT_VIA_STATION
+        session.train_info['splitViaCandidates'] = self._get_split_via_candidates(session)
         self.storage.save_user_session(session)
-        from telegramBot.messages import Messages
-        self.telegram.send_message(chat_id, Messages.request_split_via_station())
+        self.telegram.send_message(chat_id, self._build_split_via_candidate_message(session))
+
+    def _get_split_via_candidates(self, session: UserSession) -> list[str]:
+        """Return route-table based SRT via station candidates."""
+        src = session.train_info.get('srcLocate')
+        dst = session.train_info.get('dstLocate')
+        candidates = []
+
+        for route in self.SRT_SPLIT_ROUTES:
+            if src not in route or dst not in route:
+                continue
+
+            src_index = route.index(src)
+            dst_index = route.index(dst)
+            if src_index == dst_index:
+                continue
+
+            start = min(src_index, dst_index) + 1
+            end = max(src_index, dst_index)
+            for station in route[start:end]:
+                if station not in candidates:
+                    candidates.append(station)
+
+        return candidates
+
+    def _build_split_via_candidate_message(self, session: UserSession) -> str:
+        """Build a quick-select message for split via station candidates."""
+        src = session.train_info.get('srcLocate', 'N/A')
+        dst = session.train_info.get('dstLocate', 'N/A')
+        candidates = session.train_info.get('splitViaCandidates') or []
+
+        if not candidates:
+            return (
+                "분할 경유역을 입력해주세요.\n\n"
+                f"입력한 경로: {src} -> {dst}\n\n"
+                "예: 평택지제"
+            )
+
+        lines = [
+            "분할 경유역을 선택해주세요.",
+            "",
+            f"입력한 경로: {src} -> {dst}",
+            "",
+        ]
+        for index, station in enumerate(candidates, start=1):
+            lines.append(f"{index}. {station}")
+        lines.append(f"{len(candidates) + 1}. 직접 입력")
+        lines.extend([
+            "",
+            f"숫자 1~{len(candidates) + 1} 중 하나를 입력해주세요.",
+        ])
+        return "\n".join(lines)
 
     def _handle_split_via_station_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle manual split via station input."""
         provider = session.train_info.get("provider", "SRT")
-        station = InputValidator.normalize_station_input(text, provider)
+        raw_text = (text or "").strip()
+        candidates = session.train_info.get('splitViaCandidates') or []
+        if candidates and raw_text.isdigit():
+            choice = int(raw_text)
+            if 1 <= choice <= len(candidates):
+                station = candidates[choice - 1]
+            elif choice == len(candidates) + 1:
+                session.train_info['splitViaCandidates'] = []
+                self.storage.save_user_session(session)
+                self.telegram.send_message(chat_id, "분할 경유역 이름을 직접 입력해주세요.\n\n예: 평택지제")
+                return
+            else:
+                self.telegram.send_message(chat_id, self._build_split_via_candidate_message(session))
+                return
+        else:
+            station = InputValidator.normalize_station_input(raw_text, provider)
         is_valid, error = InputValidator.validate_station_name(station)
 
         if not is_valid:
@@ -471,6 +545,7 @@ class ConversationHandler:
             return
 
         session.train_info['splitViaStation'] = station
+        session.train_info.pop('splitViaCandidates', None)
         session.last_action = UserProgress.SEAT_STRATEGY_INPUT_SUCCESS
         self.storage.save_user_session(session)
         self._show_final_confirmation(chat_id, session)

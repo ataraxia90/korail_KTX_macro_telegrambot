@@ -464,6 +464,18 @@ class Messages:
 """
 
     @staticmethod
+    def request_split_option():
+        """Ask which SRT reservation mode to use."""
+        return """예매 방식을 선택해주세요.
+
+1. 직통만 검색
+2. 분할만 검색
+3. 직통 + 분할 병행 검색
+
+숫자 1, 2, 3 중 하나를 입력해주세요.
+"""
+
+    @staticmethod
     def request_split_via_station():
         """Ask for split via station."""
         return """분할 경유역을 입력해주세요.
