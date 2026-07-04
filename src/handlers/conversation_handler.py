@@ -479,7 +479,15 @@ class ConversationHandler:
         """Show final confirmation summary."""
         passenger_count = session.train_info.get('passengerCount', 1)
         seat_strategy_display = session.train_info.get('seatStrategyShow', '1명')
-        target_trains = self._get_target_train_summary(session)
+        if session.train_info.get('splitEnabled'):
+            is_valid, target_trains, error_message = self._get_split_compatible_train_summary(session)
+            if not is_valid:
+                session.last_action = UserProgress.AWAITING_SPLIT_VIA_STATION
+                self.storage.save_user_session(session)
+                self.telegram.send_message(chat_id, error_message)
+                return
+        else:
+            target_trains = self._get_target_train_summary(session)
         session.train_info['targetTrains'] = target_trains
         self.storage.save_user_session(session)
 
@@ -515,6 +523,98 @@ class ConversationHandler:
             f"1구간: {src} -> {via}\n"
             f"2구간: {via} -> {dst}"
         )
+
+    def _get_split_compatible_train_summary(self, session: UserSession) -> tuple[bool, str, str]:
+        """Return SRT trains that can be split through the selected via station."""
+        if not session.credentials:
+            return False, "", "분할 예매 가능 여부를 확인할 수 없습니다. 로그인 정보가 없습니다."
+
+        provider = session.train_info.get('provider', 'SRT')
+        if provider != "SRT":
+            return False, "", "분할 예매는 현재 SRT만 지원합니다."
+
+        src = session.train_info.get('srcLocate')
+        via = session.train_info.get('splitViaStation')
+        dst = session.train_info.get('dstLocate')
+        if not via:
+            return False, "", "경유역 정보가 없습니다. 다시 입력해주세요."
+
+        try:
+            train_service = SrtService()
+            if not train_service.login(session.credentials.korail_id, session.credentials.korail_pw):
+                return False, "", "분할 예매 가능 여부 조회에 실패했습니다. SRT 로그인에 실패했습니다."
+
+            base_kwargs = {
+                "dep_date": session.train_info['depDate'],
+                "dep_time": session.train_info['depTime'],
+                "max_dep_time": session.train_info['maxDepTime'],
+                "passenger_count": session.train_info.get('passengerCount', 1),
+                "verbose": False,
+                "available_only": False,
+            }
+            direct_trains = train_service.search_trains(
+                src_locate=src,
+                dst_locate=dst,
+                **base_kwargs,
+            )
+            first_segment_trains = train_service.search_trains(
+                src_locate=src,
+                dst_locate=via,
+                **base_kwargs,
+            )
+            second_segment_trains = train_service.search_trains(
+                src_locate=via,
+                dst_locate=dst,
+                **base_kwargs,
+            )
+
+            direct_numbers = self._train_number_set(direct_trains, provider)
+            first_numbers = self._train_number_set(first_segment_trains, provider)
+            second_numbers = self._train_number_set(second_segment_trains, provider)
+            compatible_numbers = direct_numbers & first_numbers & second_numbers
+
+            logger.info(
+                "SRT split compatibility checked: route=%s->%s via %s, "
+                "direct=%s, first=%s, second=%s, compatible=%s",
+                src,
+                dst,
+                via,
+                sorted(direct_numbers),
+                sorted(first_numbers),
+                sorted(second_numbers),
+                sorted(compatible_numbers),
+            )
+
+            if not compatible_numbers:
+                message = (
+                    "선택한 경유역으로 분할 예매 가능한 대상 열차가 없습니다.\n\n"
+                    f"경로: {src} -> {via} -> {dst}\n"
+                    "직통 대상 열차가 경유역에 정차하지 않거나, 두 구간에서 같은 열차번호로 조회되지 않습니다.\n"
+                    "다른 경유역을 입력해주세요."
+                )
+                return False, "", message
+
+            compatible_trains = [
+                train for train in direct_trains
+                if self._extract_train_number(train, provider) in compatible_numbers
+            ]
+            summaries = [self._format_train_target(train, provider) for train in compatible_trains]
+            display_limit = 5
+            if len(summaries) > display_limit:
+                hidden_count = len(summaries) - display_limit
+                return True, f"{', '.join(summaries[:display_limit])} 외 {hidden_count}건", ""
+            return True, ", ".join(summaries), ""
+        except Exception as e:
+            logger.warning(f"Failed to check SRT split compatibility: {e}", exc_info=True)
+            return False, "", "분할 예매 가능 여부 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+
+    def _train_number_set(self, trains: list, provider: str) -> set[str]:
+        """Extract normalized train numbers from search results."""
+        return {
+            number
+            for number in (self._extract_train_number(train, provider) for train in trains)
+            if number
+        }
 
     def _get_target_train_summary(self, session: UserSession) -> str:
         """Return a user-facing summary of trains matched by the current search criteria."""

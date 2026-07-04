@@ -136,7 +136,8 @@ class SrtService:
         max_dep_time: str = "2400",
         seat_type=None,
         passenger_count: int = 1,
-        max_attempts: Optional[int] = None
+        max_attempts: Optional[int] = None,
+        target_train_numbers: Optional[set[str]] = None
     ):
         """Search and reserve until successful."""
         attempts = 0
@@ -146,7 +147,8 @@ class SrtService:
             dst_locate=dst_locate,
             dep_time=dep_time,
             max_dep_time=max_dep_time,
-            passenger_count=passenger_count
+            passenger_count=passenger_count,
+            target_train_numbers=target_train_numbers
         )
 
         while True:
@@ -171,6 +173,11 @@ class SrtService:
                 passenger_count=passenger_count,
                 verbose=attempts % 60 == 0
             )
+            if target_train_numbers:
+                trains = [
+                    train for train in trains
+                    if self._extract_train_number(train) in target_train_numbers
+                ]
 
             for train in trains:
                 reservation = self.reserve_train(train, seat_type=seat_type, passenger_count=passenger_count)
@@ -186,7 +193,8 @@ class SrtService:
         dst_locate: str,
         dep_time: str,
         max_dep_time: str,
-        passenger_count: int
+        passenger_count: int,
+        target_train_numbers: Optional[set[str]] = None
     ) -> Optional[datetime]:
         """Return when the reservation loop should stop in Asia/Seoul time."""
         candidate_times = []
@@ -201,6 +209,11 @@ class SrtService:
                 verbose=False,
                 available_only=False
             )
+            if target_train_numbers:
+                target_trains = [
+                    train for train in target_trains
+                    if self._extract_train_number(train) in target_train_numbers
+                ]
             candidate_times = [
                 self._extract_departure_time(train)
                 for train in target_trains
@@ -289,6 +302,35 @@ class SrtService:
             return int("".join(time_part.split(":"))[:4])
         except (IndexError, ValueError):
             return 0
+
+    def _extract_train_number(self, train) -> str:
+        """Extract a normalized SRT train number from an API train object."""
+        for attr in (
+            "train_no", "trainnum", "train_num", "train_number", "number",
+            "train_name", "name", "train", "type"
+        ):
+            value = getattr(train, attr, None)
+            if value:
+                text = str(value).strip()
+                if text and text.lower() not in ("none", "null"):
+                    return self._normalize_train_number(text)
+
+        text = str(train)
+        match = re.search(r"\b(SRT)[\s-]*(\d{1,4})\b", text, re.IGNORECASE)
+        if match:
+            return f"SRT{match.group(2)}"
+        match = re.search(r"\b(\d{1,4})\s*(?:열차|호차|호)\b", text)
+        if match:
+            return f"SRT{match.group(1)}"
+        return ""
+
+    def _normalize_train_number(self, text: str) -> str:
+        match = re.search(r"\b(SRT)[\s-]*(\d{1,4})\b", text, re.IGNORECASE)
+        if match:
+            return f"SRT{match.group(2)}"
+        if text.isdigit():
+            return f"SRT{text}"
+        return text
 
     def _filter_trains(self, trains: List, dep_date: str, dep_time: str, max_dep_time: str) -> List:
         requested_date = dep_date[:8]

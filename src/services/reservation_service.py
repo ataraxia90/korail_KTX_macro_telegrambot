@@ -94,6 +94,21 @@ class ReservationService:
             if search_params.split_enabled and search_params.split_via_station:
                 arguments.append(search_params.split_via_station)
             src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            logger.info(
+                "Starting reservation subprocess: chat_id=%s, module=%s, "
+                "provider=%s, split_enabled=%s, split_via_station=%s, "
+                "route=%s->%s, dep_date=%s, dep_time=%s, max_dep_time=%s",
+                chat_id,
+                module_name,
+                search_params.provider,
+                search_params.split_enabled,
+                search_params.split_via_station,
+                search_params.src_locate,
+                search_params.dst_locate,
+                search_params.dep_date,
+                search_params.dep_time,
+                search_params.max_dep_time,
+            )
             proc = subprocess.Popen(
                 [sys.executable, '-m', module_name] + arguments,
                 cwd=src_dir
