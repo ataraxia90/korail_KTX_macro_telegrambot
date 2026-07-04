@@ -40,8 +40,8 @@ class SrtSplitBackgroundReservationProcess:
 
     def run(self):
         segments = [
-            ("1구간", self.src_locate, self.via_station),
-            ("2구간", self.via_station, self.dst_locate),
+            ("1구간", self.src_locate, self.via_station, self.max_dep_time),
+            ("2구간", self.via_station, self.dst_locate, "2400"),
         ]
 
         try:
@@ -80,15 +80,23 @@ class SrtSplitBackgroundReservationProcess:
             )
             with ThreadPoolExecutor(max_workers=2) as executor:
                 futures = {}
-                for label, src, dst in segments:
+                for label, src, dst, segment_max_dep_time in segments:
                     logger.info(
-                        "SRT split segment submitted: chat_id=%s, label=%s, route=%s->%s",
+                        "SRT split segment submitted: chat_id=%s, label=%s, route=%s->%s, max_dep_time=%s",
                         self.chat_id,
                         label,
                         src,
                         dst,
+                        segment_max_dep_time,
                     )
-                    future = executor.submit(self._reserve_segment, label, src, dst, compatible_numbers)
+                    future = executor.submit(
+                        self._reserve_segment,
+                        label,
+                        src,
+                        dst,
+                        segment_max_dep_time,
+                        compatible_numbers,
+                    )
                     futures[future] = (label, src, dst)
 
                 results = []
@@ -123,7 +131,7 @@ class SrtSplitBackgroundReservationProcess:
             logger.error(f"SRT split reservation process error: {e}", exc_info=True)
             self._send_callback(
                 f"❌ SRT 분할 예매 처리 중 오류가 발생했습니다.\n\n오류: {e}",
-                status=1
+                status=1,
             )
 
     def _get_split_compatible_train_numbers(self) -> set[str]:
@@ -141,6 +149,12 @@ class SrtSplitBackgroundReservationProcess:
             "verbose": False,
             "available_only": False,
         }
+        second_segment_kwargs = {
+            **base_kwargs,
+            # max_dep_time is based on the original departure station.
+            # The matched train leaves the via station later, so keep this segment open.
+            "max_dep_time": "2400",
+        }
         direct_trains = service.search_trains(
             src_locate=self.src_locate,
             dst_locate=self.dst_locate,
@@ -154,7 +168,7 @@ class SrtSplitBackgroundReservationProcess:
         second_segment_trains = service.search_trains(
             src_locate=self.via_station,
             dst_locate=self.dst_locate,
-            **base_kwargs,
+            **second_segment_kwargs,
         )
 
         direct_numbers = self._train_number_set(direct_trains)
@@ -206,7 +220,14 @@ class SrtSplitBackgroundReservationProcess:
             return f"SRT{text}"
         return text
 
-    def _reserve_segment(self, label: str, src: str, dst: str, target_train_numbers: set[str]) -> dict:
+    def _reserve_segment(
+        self,
+        label: str,
+        src: str,
+        dst: str,
+        segment_max_dep_time: str,
+        target_train_numbers: set[str],
+    ) -> dict:
         service = SrtService()
         logger.info(
             "SRT split segment started: chat_id=%s, label=%s, route=%s->%s",
@@ -247,10 +268,10 @@ class SrtSplitBackgroundReservationProcess:
                 src_locate=src,
                 dst_locate=dst,
                 dep_time=self.dep_time,
-                max_dep_time=self.max_dep_time,
+                max_dep_time=segment_max_dep_time,
                 seat_type=service.parse_seat_type(self.seat_type_str),
                 passenger_count=self.passenger_count,
-                target_train_numbers=target_train_numbers
+                target_train_numbers=target_train_numbers,
             )
             result["reservation"] = reservation
             if not reservation:
@@ -281,7 +302,7 @@ class SrtSplitBackgroundReservationProcess:
 
     def _build_success_message(self, results: list[dict]) -> str:
         lines = [
-            "✅ SRT 분할 예매가 성공했습니다!",
+            "🎉 SRT 분할 예매가 성공했습니다!",
             "",
             "두 구간 모두 예약되었습니다.",
             "===================",
@@ -295,7 +316,7 @@ class SrtSplitBackgroundReservationProcess:
         lines.extend([
             "===================",
             f"중요: {settings.PAYMENT_TIMEOUT_MINUTES}분 이내에 SRT 사이트에서 결제를 완료해주세요.",
-            f"Payment link: {settings.SRT_PAYMENT_URL}",
+            f"결제 링크: {settings.SRT_PAYMENT_URL}",
         ])
         return "\n".join(lines)
 
@@ -303,7 +324,7 @@ class SrtSplitBackgroundReservationProcess:
         lines = [
             "❌ SRT 분할 예매가 완료되지 않았습니다.",
             "",
-            "두 구간이 모두 예약되어야 성공으로 처리합니다.",
+            "두 구간이 모두 예약되어야 성공으로 처리됩니다.",
             "===================",
         ]
         for result in results:
@@ -320,7 +341,7 @@ class SrtSplitBackgroundReservationProcess:
             ])
         lines.extend([
             "한 구간만 예약된 경우 SRT 사이트에서 직접 결제 또는 취소 상태를 확인해주세요.",
-            f"Payment link: {settings.SRT_PAYMENT_URL}",
+            f"결제 링크: {settings.SRT_PAYMENT_URL}",
         ])
         return "\n".join(lines)
 
@@ -339,7 +360,7 @@ class SrtSplitBackgroundReservationProcess:
                     "split": "1",
                 },
                 verify=False,
-                timeout=10
+                timeout=10,
             )
             if response.status_code != 200:
                 logger.warning(

@@ -552,6 +552,12 @@ class ConversationHandler:
                 "verbose": False,
                 "available_only": False,
             }
+            second_segment_kwargs = {
+                **base_kwargs,
+                # The user's max time is based on the original departure station.
+                # The via-station departure is naturally later, so do not exclude it here.
+                "max_dep_time": "2400",
+            }
             direct_trains = train_service.search_trains(
                 src_locate=src,
                 dst_locate=dst,
@@ -565,7 +571,7 @@ class ConversationHandler:
             second_segment_trains = train_service.search_trains(
                 src_locate=via,
                 dst_locate=dst,
-                **base_kwargs,
+                **second_segment_kwargs,
             )
 
             direct_numbers = self._train_number_set(direct_trains, provider)
