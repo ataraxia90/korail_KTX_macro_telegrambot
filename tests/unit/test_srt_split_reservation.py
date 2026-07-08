@@ -43,8 +43,8 @@ def _srt_session():
     session.train_info = {
         "provider": "SRT",
         "depDate": "20991231",
-        "srcLocate": "Suseo",
-        "dstLocate": "Daejeon",
+        "srcLocate": "수서",
+        "dstLocate": "대전",
         "depTime": "082500",
         "maxDepTime": "0830",
         "trainType": "SRT",
@@ -73,16 +73,16 @@ def test_srt_conversation_collects_manual_split_station_and_starts_split_search(
         handler.handle_message(12345, "2")
         assert storage.session.last_action == UserProgress.AWAITING_SPLIT_VIA_STATION
 
-        handler.handle_message(12345, "PyeongtaekJije")
+        handler.handle_message(12345, "평택지제")
         assert storage.session.last_action == UserProgress.SEAT_STRATEGY_INPUT_SUCCESS
         assert storage.session.train_info["splitEnabled"] is True
-        assert storage.session.train_info["splitViaStation"] == "PyeongtaekJije"
+        assert storage.session.train_info["splitViaStation"] == "평택지제"
 
         handler.handle_message(12345, "Y")
 
     search_params = reservation.start_reservation_process.call_args.kwargs["search_params"]
     assert search_params.split_enabled is True
-    assert search_params.split_via_station == "PyeongtaekJije"
+    assert search_params.split_via_station == "평택지제"
     assert search_params.split_mode == "split_only"
 
 
@@ -106,7 +106,7 @@ def test_srt_split_compatibility_rejects_via_station_without_matching_train():
 
     storage = FakeConversationStorage(_srt_session())
     storage.session.train_info["splitEnabled"] = True
-    storage.session.train_info["splitViaStation"] = "PyeongtaekJije"
+    storage.session.train_info["splitViaStation"] = "평택지제"
     handler = ConversationHandler(storage, Mock(), Mock())
 
     with patch("handlers.conversation_handler.SrtService", FakeSrtService):
@@ -126,8 +126,8 @@ def test_reservation_service_uses_srt_split_process_when_enabled(mock_popen):
     params = TrainSearchParams(
         provider="SRT",
         dep_date="20991231",
-        src_locate="Suseo",
-        dst_locate="Daejeon",
+        src_locate="수서",
+        dst_locate="대전",
         dep_time="082500",
         max_dep_time="0830",
         train_type="SRT",
@@ -137,7 +137,7 @@ def test_reservation_service_uses_srt_split_process_when_enabled(mock_popen):
         passenger_count=1,
         seat_strategy="consecutive",
         split_enabled=True,
-        split_via_station="PyeongtaekJije",
+        split_via_station="평택지제",
         split_mode="split_only",
     )
 
@@ -145,7 +145,7 @@ def test_reservation_service_uses_srt_split_process_when_enabled(mock_popen):
 
     popen_args = mock_popen.call_args.args[0]
     assert popen_args[1:3] == ["-m", "telegramBot.srtSplitBackProcess"]
-    assert popen_args[-2:] == ["PyeongtaekJije", "split_only"]
+    assert popen_args[-2:] == ["평택지제", "split_only"]
     assert storage.running.search_params.split_enabled is True
 
 
@@ -177,8 +177,8 @@ class FakeSplitSrtService:
     "user",
     "password",
     "20991231",
-    "Suseo",
-    "Daejeon",
+    "수서",
+    "대전",
     "082500",
     "SRT",
     "ReserveOption.GENERAL_FIRST",
@@ -186,7 +186,7 @@ class FakeSplitSrtService:
     "0830",
     "1",
     "consecutive",
-    "PyeongtaekJije",
+    "평택지제",
     "split_only",
 ])
 @patch("telegramBot.srtSplitBackProcess.SrtService", FakeSplitSrtService)
@@ -247,8 +247,8 @@ class FakePartialRetrySrtService:
     "user",
     "password",
     "20991231",
-    "Suseo",
-    "Daejeon",
+    "수서",
+    "대전",
     "082500",
     "SRT",
     "ReserveOption.GENERAL_FIRST",
@@ -256,7 +256,7 @@ class FakePartialRetrySrtService:
     "0830",
     "1",
     "consecutive",
-    "PyeongtaekJije",
+    "평택지제",
     "split_only",
 ])
 @patch("telegramBot.srtSplitBackProcess.time.sleep", lambda seconds: None)

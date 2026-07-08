@@ -20,8 +20,22 @@ class FakeKorailTrain:
 class FakeKorail:
     def __init__(self):
         self.reserve_called = False
+        self.include_no_seats = None
+        self.include_waiting_list = None
 
-    def search_train(self, src, dst, date, time, train_type=None, passengers=None):
+    def search_train(
+        self,
+        src,
+        dst,
+        date,
+        time,
+        train_type=None,
+        passengers=None,
+        include_no_seats=False,
+        include_waiting_list=False
+    ):
+        self.include_no_seats = include_no_seats
+        self.include_waiting_list = include_waiting_list
         return [
             FakeKorailTrain("20260702", "000600", "next-day"),
             FakeKorailTrain("20260701", "082500", "same-day"),
@@ -33,7 +47,19 @@ class FakeKorail:
 
 
 class FakeKorailWithEarlierSameDayResults(FakeKorail):
-    def search_train(self, src, dst, date, time, train_type=None, passengers=None):
+    def search_train(
+        self,
+        src,
+        dst,
+        date,
+        time,
+        train_type=None,
+        passengers=None,
+        include_no_seats=False,
+        include_waiting_list=False
+    ):
+        self.include_no_seats = include_no_seats
+        self.include_waiting_list = include_waiting_list
         return [
             FakeKorailTrain("20260701", "000600", "too-early-midnight"),
             FakeKorailTrain("20260701", "063000", "too-early-morning"),
@@ -60,6 +86,27 @@ def test_korail_search_filters_out_same_day_trains_before_start_time():
     trains = service.search_trains("20260701", "대전", "서울", "082000", "0830", verbose=False)
 
     assert [train.name for train in trains] == ["in-window"]
+
+
+def test_korail_search_can_include_sold_out_and_waiting_trains_for_summary():
+    fake = FakeKorail()
+    service = KorailService()
+    service._korail_instance = fake
+    service._logged_in = True
+
+    service.search_trains(
+        "20260701",
+        "서울",
+        "대전",
+        "165000",
+        "1700",
+        verbose=False,
+        include_no_seats=True,
+        include_waiting_list=True,
+    )
+
+    assert fake.include_no_seats is True
+    assert fake.include_waiting_list is True
 
 
 def test_korail_loop_stops_after_last_target_train_departure():

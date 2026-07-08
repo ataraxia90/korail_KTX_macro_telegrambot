@@ -725,6 +725,8 @@ class ConversationHandler:
                 kwargs["train_type"] = self._parse_korail_train_type(
                     session.train_info.get('trainType', 'TrainType.KTX')
                 )
+                kwargs["include_no_seats"] = True
+                kwargs["include_waiting_list"] = True
 
             trains = train_service.search_trains(**kwargs)
             if not trains:

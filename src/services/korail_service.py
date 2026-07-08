@@ -98,7 +98,9 @@ class KorailService:
         max_dep_time: str = "2400",
         train_type: TrainType = TrainType.KTX,
         passenger_count: int = 1,
-        verbose: bool = True
+        verbose: bool = True,
+        include_no_seats: bool = False,
+        include_waiting_list: bool = False
     ) -> List:
         """
         Search for available trains.
@@ -111,6 +113,8 @@ class KorailService:
             max_dep_time: Maximum departure time threshold (HHMM)
             train_type: Type of train to search for
             passenger_count: Number of adult passengers
+            include_no_seats: Include sold-out trains in the result
+            include_waiting_list: Include trains that support wait-list reservation
 
         Returns:
             List of available trains
@@ -143,7 +147,9 @@ class KorailService:
                 dep_date,
                 dep_time,
                 train_type=train_type,
-                passengers=passengers
+                passengers=passengers,
+                include_no_seats=include_no_seats,
+                include_waiting_list=include_waiting_list
             )
 
             if verbose:
