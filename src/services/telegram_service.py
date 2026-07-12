@@ -44,9 +44,17 @@ class TelegramService:
             logger.info(f"Message sent to chat_id={chat_id}")
             return True
         except Exception as e:
+            response = locals().get("response")
+            response_detail = ""
+            if response is not None:
+                response_detail = (
+                    f", status_code={getattr(response, 'status_code', 'unknown')}, "
+                    f"response={getattr(response, 'text', '')[:500]}"
+                )
             logger.error(
                 f"Failed to send message to chat_id={chat_id}: "
-                f"{type(e).__name__}: {getattr(e, 'strerror', None) or 'request failed'}"
+                f"{type(e).__name__}: {getattr(e, 'strerror', None) or str(e) or 'request failed'}"
+                f"{response_detail}"
             )
             return False
 

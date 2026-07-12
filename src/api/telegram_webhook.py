@@ -202,13 +202,11 @@ class TelegramWebhook(Resource):
                 f"is_multi={is_multi}, total_seats={total_seats}, seat_strategy={seat_strategy}"
             )
 
-            # Send message to user
-            self.telegram.send_message(chat_id, msg)
-
             # Handle different status codes
             # status=0: Complete success (all reservations done)
             # status=1: Error/failure
             # status=2: Partial success (random seating intermediate notification)
+            self._send_callback_message(chat_id, msg, str(status))
 
             if str(status) == "2":
                 # Partial reservation notification (random seating)
@@ -282,3 +280,30 @@ class TelegramWebhook(Resource):
         except Exception as e:
             logger.error(f"Error handling callback: {e}", exc_info=True)
             return make_response("OK")
+
+    def _send_callback_message(self, chat_id: int, message: str, status: str) -> bool:
+        """Send a background callback message, retrying success callbacks with a short fallback."""
+        if self.telegram.send_message(chat_id, message):
+            return True
+
+        logger.error(
+            "Failed to send reservation callback message: chat_id=%s, status=%s, message_length=%s",
+            chat_id,
+            status,
+            len(message or "")
+        )
+
+        if status != "0":
+            return False
+
+        fallback = (
+            "✅ 예약이 성공했습니다.\n\n"
+            "상세 성공 메시지 전송에 실패했지만, 결제 리마인더가 시작됩니다.\n"
+            "기차 앱 또는 예매 사이트에서 예약 내역을 확인하고 제한 시간 안에 결제를 완료해주세요."
+        )
+        if self.telegram.send_message(chat_id, fallback):
+            logger.info("Sent fallback reservation success message to chat_id=%s", chat_id)
+            return True
+
+        logger.error("Failed to send fallback reservation success message to chat_id=%s", chat_id)
+        return False
