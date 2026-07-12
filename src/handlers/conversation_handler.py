@@ -418,8 +418,12 @@ class ConversationHandler:
             self.telegram.send_message(chat_id, error)
             return
 
-        strategy = "consecutive" if text == "1" else "random"
-        strategy_display = "연속 좌석" if text == "1" else "랜덤 배치"
+        strategy_map = {
+            "1": ("consecutive", "붙은 좌석만"),
+            "2": ("flexible", "가능하면 함께, 아니면 따로"),
+            "3": ("random", "따로따로만"),
+        }
+        strategy, strategy_display = strategy_map[text]
 
         session.train_info['seatStrategy'] = strategy
         session.train_info['seatStrategyShow'] = strategy_display

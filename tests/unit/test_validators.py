@@ -402,6 +402,11 @@ class TestSeatStrategyValidation:
 
     def test_valid_random_seats(self):
         """Test valid random seat strategy."""
+        valid, _ = InputValidator.validate_seat_strategy_choice("3")
+        assert valid is True
+
+    def test_valid_flexible_seats(self):
+        """Test valid flexible seat strategy."""
         valid, _ = InputValidator.validate_seat_strategy_choice("2")
         assert valid is True
 
@@ -410,9 +415,9 @@ class TestSeatStrategyValidation:
         valid, error = InputValidator.validate_seat_strategy_choice("0")
         assert valid is False
 
-    def test_invalid_three(self):
-        """Test invalid choice: 3."""
-        valid, error = InputValidator.validate_seat_strategy_choice("3")
+    def test_invalid_four(self):
+        """Test invalid choice: 4."""
+        valid, error = InputValidator.validate_seat_strategy_choice("4")
         assert valid is False
 
     def test_invalid_non_digit(self):

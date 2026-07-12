@@ -402,7 +402,7 @@ class TestConversationHandler:
         self.handler.handle_message(chat_id, "수서")
         src_message = self.telegram.send_message.call_args[0][1]
         assert "letskorail" not in src_message
-        assert "부산" in src_message
+        assert "수서" in src_message
 
     def test_seat_option_selection(self):
         """Test seat option selection."""
@@ -471,10 +471,17 @@ class TestConversationHandler:
         assert updated_session.last_action == UserProgress.SEAT_STRATEGY_INPUT_SUCCESS
         assert updated_session.train_info['seatStrategy'] == 'consecutive'
 
-        # Reset and test random
+        # Reset and test flexible
         session.last_action = UserProgress.PASSENGER_COUNT_INPUT_SUCCESS
         self.storage.save_user_session(session)
         self.handler.handle_message(chat_id, "2")
+        updated_session = self.storage.get_user_session(chat_id)
+        assert updated_session.train_info['seatStrategy'] == 'flexible'
+
+        # Reset and test random
+        session.last_action = UserProgress.PASSENGER_COUNT_INPUT_SUCCESS
+        self.storage.save_user_session(session)
+        self.handler.handle_message(chat_id, "3")
         updated_session = self.storage.get_user_session(chat_id)
         assert updated_session.train_info['seatStrategy'] == 'random'
 

@@ -164,6 +164,10 @@ class BackgroundReservationProcess:
                 # Random seating: reserve one seat at a time with payment confirmation
                 self._run_random_reservation()
                 return
+            if self.seat_strategy == "flexible":
+                # Flexible seating: try all remaining seats together, then fall back to single seats.
+                self._run_flexible_reservation()
+                return
 
             # Consecutive seating: original logic
             # Search and reserve
@@ -284,7 +288,7 @@ class BackgroundReservationProcess:
 🎉 열차 예약에 성공했습니다!!
 
 총 {total_seats}명의 좌석이 개별적으로 예약되었습니다.
-(랜덤 배치 옵션: 좌석이 떨어져 있을 수 있습니다)
+(개별 예약: 좌석이 떨어져 있을 수 있습니다)
 
 예약에 성공한 열차 정보는 다음과 같습니다.
 ===================
@@ -531,6 +535,180 @@ class BackgroundReservationProcess:
             logger.error(f"Failed to connect to main app for callback: {e}")
         except Exception as e:
             logger.error(f"Unexpected error sending callback: {e}", exc_info=True)
+
+    def _run_flexible_reservation(self):
+        """
+        Run flexible seating reservation.
+
+        Before any individual ticket is reserved, each cycle tries:
+        1. Reserve all requested seats together.
+        2. If that fails, reserve one seat.
+
+        Once an individual seat is reserved, the remaining seats continue one by one
+        so payment tracking stays compatible with the existing random-seat flow.
+        """
+        total_seats = self.passenger_count
+        seat_index = 0
+        group_cutoff_at = self._get_flexible_cutoff_time(total_seats)
+        single_cutoff_at = self._get_flexible_cutoff_time(1)
+        logger.info(f"=== FLEXIBLE SEATING MODE: {total_seats} seats ===")
+
+        while seat_index < total_seats:
+            remaining = total_seats - seat_index
+            active_cutoff_at = group_cutoff_at if seat_index == 0 else single_cutoff_at
+            if self.korail._is_search_expired(active_cutoff_at):
+                self.storage.set_current_seat_index(self.chat_id, None)
+                self._send_callback(
+                    "⏱️ 예약 감시가 종료되었습니다.\n\n"
+                    "마지막 대상 열차의 출발 시간이 지나 더 이상 예약을 시도하지 않습니다.",
+                    status=1,
+                    seat_strategy=self.seat_strategy
+                )
+                return
+
+            if remaining > 1 and seat_index == 0:
+                group_reservation = self._try_reserve_group_once(remaining)
+                if group_reservation:
+                    logger.info(f"Flexible seating reserved all {remaining} seats together")
+                    self._send_callback(
+                        self._build_flexible_group_success_message(group_reservation, remaining),
+                        status=0,
+                        seat_strategy=self.seat_strategy
+                    )
+                    return
+
+            reservation = self._try_reserve_single_once(seat_index)
+            if not reservation:
+                time.sleep(self.korail._search_interval)
+                continue
+
+            reservation_data = {
+                "seat_index": seat_index,
+                "train_info": str(reservation),
+                "reserved_at": datetime.now().isoformat()
+            }
+            self.storage.save_partial_reservation(self.chat_id, seat_index, reservation_data)
+            self._update_multi_reservation_status(seat_index, reservation, total_seats)
+            self.storage.set_current_seat_index(self.chat_id, seat_index)
+
+            message = self._build_partial_reservation_message(
+                seat_index,
+                total_seats,
+                reservation
+            )
+            self._send_callback(message, status=2, seat_strategy=self.seat_strategy)
+
+            seat_index += 1
+            if seat_index < total_seats:
+                payment_confirmed = self.storage.wait_for_payment(
+                    self.chat_id,
+                    seat_index - 1,
+                    timeout=600
+                )
+
+                if payment_confirmed:
+                    confirm_msg = f"""
+✅ {seat_index}번째 좌석 결제 확인!
+
+다음 좌석 예약을 시작합니다...
+"""
+                    self._send_callback(confirm_msg, status=2, seat_strategy=self.seat_strategy)
+                else:
+                    timeout_msg = f"""
+⏰ {seat_index}번째 좌석 결제 시간 초과
+
+10분이 지났습니다. 다음 좌석 예약을 진행합니다.
+
+⚠️ 미결제 좌석은 자동 취소될 수 있으니 빠르게 결제해주세요!
+"""
+                    self._send_callback(timeout_msg, status=2, seat_strategy=self.seat_strategy)
+
+                time.sleep(3)
+
+        self.storage.set_current_seat_index(self.chat_id, None)
+        all_reservations = self.storage.get_partial_reservations(self.chat_id)
+        final_message = self._build_final_random_message(all_reservations, total_seats)
+        self._send_callback(final_message, status=0, seat_strategy=self.seat_strategy)
+        logger.info(f"Flexible seating reserved all {total_seats} seats individually")
+
+    def _get_flexible_cutoff_time(self, passenger_count: int):
+        return self.korail._get_search_cutoff_time(
+            dep_date=self.dep_date,
+            src_locate=self.src_locate,
+            dst_locate=self.dst_locate,
+            dep_time=self.dep_time,
+            max_dep_time=self.max_dep_time,
+            train_type=self.train_type,
+            passenger_count=passenger_count
+        )
+
+    def _try_reserve_group_once(self, passenger_count: int):
+        """Try one search/reserve pass for a group reservation."""
+        try:
+            trains = self.korail.search_trains(
+                dep_date=self.dep_date,
+                src_locate=self.src_locate,
+                dst_locate=self.dst_locate,
+                dep_time=self.dep_time,
+                max_dep_time=self.max_dep_time,
+                train_type=self.train_type,
+                passenger_count=passenger_count,
+                verbose=False
+            )
+            for train in trains:
+                logger.info(f"Flexible seating trying group reservation ({passenger_count} seats): {train}")
+                reservation = self.korail.reserve_train(
+                    train,
+                    option=self.reserve_option,
+                    passenger_count=passenger_count
+                )
+                if reservation and reservation != "DUPLICATE":
+                    return reservation
+        except Exception as e:
+            logger.error(f"Flexible group reservation attempt failed: {e}", exc_info=True)
+        return None
+
+    def _try_reserve_single_once(self, seat_index: int):
+        """Try one search/reserve pass for a single-seat reservation."""
+        try:
+            trains = self.korail.search_trains(
+                dep_date=self.dep_date,
+                src_locate=self.src_locate,
+                dst_locate=self.dst_locate,
+                dep_time=self.dep_time,
+                max_dep_time=self.max_dep_time,
+                train_type=self.train_type,
+                passenger_count=1,
+                verbose=False
+            )
+            for train in trains:
+                logger.info(f"Flexible seating trying single reservation {seat_index + 1}: {train}")
+                reservation = self.korail.reserve_train(
+                    train,
+                    option=self.reserve_option,
+                    passenger_count=1
+                )
+                if reservation and reservation != "DUPLICATE":
+                    return reservation
+        except Exception as e:
+            logger.error(f"Flexible single reservation attempt failed: {e}", exc_info=True)
+        return None
+
+    def _build_flexible_group_success_message(self, reservation, passenger_count: int) -> str:
+        """Build a success message when flexible mode reserved all seats together."""
+        return f"""
+🎉 열차 예약에 성공했습니다!!
+
+예약에 성공한 열차 정보는 다음과 같습니다.
+===================
+{reservation}
+===================
+
+👥 인원: {passenger_count}명
+
+⏰ 중요: {settings.PAYMENT_TIMEOUT_MINUTES}분 이내에 코레일 사이트에서 결제를 완료해주세요!
+🔗 결제 링크: {settings.KORAIL_PAYMENT_URL}
+"""
 
     def _run_random_reservation(self):
         """
@@ -789,7 +967,7 @@ class BackgroundReservationProcess:
 🎉🎉 모든 좌석 예약 완료! 🎉🎉
 
 총 {total_seats}명의 좌석이 개별적으로 예약되었습니다.
-(랜덤 배치: 좌석이 떨어져 있을 수 있습니다)
+(개별 예약: 좌석이 떨어져 있을 수 있습니다)
 
 ━━━━━━━━━━━━━━━━━━━━
 {reservation_details}

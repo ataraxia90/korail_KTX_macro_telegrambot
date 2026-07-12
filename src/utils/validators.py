@@ -401,7 +401,7 @@ class InputValidator:
     @staticmethod
     def validate_seat_strategy_choice(choice: str) -> Tuple[bool, Optional[str]]:
         """
-        Validate seat strategy choice (1 or 2).
+        Validate seat strategy choice (1, 2, or 3).
 
         Args:
             choice: User's choice
@@ -410,21 +410,21 @@ class InputValidator:
             Tuple of (is_valid, error_message)
         """
         if not choice:
-            return False, "좌석 배치 방식을 선택해주세요. (1: 연속 좌석, 2: 랜덤 배치)"
+            return False, "좌석 배치 방식을 선택해주세요. (1: 붙은 좌석만, 2: 가능하면 함께 아니면 따로, 3: 따로따로만)"
 
         # Trim whitespace
         choice = choice.strip()
 
         if not choice:
-            return False, "좌석 배치 방식을 선택해주세요. (1: 연속 좌석, 2: 랜덤 배치)"
+            return False, "좌석 배치 방식을 선택해주세요. (1: 붙은 좌석만, 2: 가능하면 함께 아니면 따로, 3: 따로따로만)"
 
         # Check if it's a digit
         if not choice.isdigit():
-            return False, "숫자를 입력해주세요. (1 또는 2)"
+            return False, "숫자를 입력해주세요. (1, 2, 3)"
 
         # Validate choice
-        if choice not in ["1", "2"]:
-            return False, "1 또는 2를 입력해주세요. (1: 연속 좌석, 2: 랜덤 배치)"
+        if choice not in ["1", "2", "3"]:
+            return False, "1, 2, 3 중 하나를 입력해주세요. (1: 붙은 좌석만, 2: 가능하면 함께 아니면 따로, 3: 따로따로만)"
 
         return True, None
 

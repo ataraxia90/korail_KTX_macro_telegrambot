@@ -383,7 +383,7 @@ class CommandHandler:
 
     def _train_info_from_search_params(self, params: TrainSearchParams) -> dict:
         """Build conversation train_info from stored search params."""
-        seat_strategy_show = "연속 좌석" if params.seat_strategy == "consecutive" else "랜덤 배치"
+        seat_strategy_show = self._seat_strategy_display(params.seat_strategy)
         return {
             "provider": params.provider,
             "depDate": params.dep_date,
@@ -408,7 +408,7 @@ class CommandHandler:
         """Build confirmation text for a repeated reservation."""
         from telegramBot.messages import Messages
 
-        seat_strategy_show = "연속 좌석" if params.seat_strategy == "consecutive" else "랜덤 배치"
+        seat_strategy_show = self._seat_strategy_display(params.seat_strategy)
         summary = Messages.CONFIRM_RESERVATION.format(
             provider=params.provider,
             depDate=params.dep_date,
@@ -430,6 +430,14 @@ class CommandHandler:
                 f"2구간: {params.split_via_station} -> {params.dst_locate}"
             )
         return f"🔁 직전 예약 조건을 불러왔습니다.\n\n{summary}"
+
+    @staticmethod
+    def _seat_strategy_display(strategy: str) -> str:
+        return {
+            "consecutive": "붙은 좌석만",
+            "flexible": "가능하면 함께, 아니면 따로",
+            "random": "따로따로만",
+        }.get(strategy, "붙은 좌석만")
 
     def _handle_admin_command(self, chat_id: int, handler_func, command_name: str = "") -> None:
         """

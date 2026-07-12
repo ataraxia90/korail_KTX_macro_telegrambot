@@ -191,9 +191,16 @@ class MultiReservationReminderService:
 
         if pending_count > 0:
             lines.append(f"\n💡 결제 후 아무 메시지나 입력하면 알림이 중단됩니다.")
-            lines.append(f"🔗 결제: {settings.KORAIL_PAYMENT_URL}")
+            payment_url = self._payment_url_for_status(status)
+            lines.append(f"🔗 결제: {payment_url}")
 
         return "\n".join(lines)
+
+    def _payment_url_for_status(self, status: MultiReservationStatus) -> str:
+        """Choose a payment URL that matches the reservation provider when possible."""
+        if any("SRT" in (reservation.train_info or "").upper() for reservation in status.reservations):
+            return settings.SRT_PAYMENT_URL
+        return settings.KORAIL_PAYMENT_URL
 
     def mark_seat_paid(self, chat_id: int, seat_number: int) -> bool:
         """

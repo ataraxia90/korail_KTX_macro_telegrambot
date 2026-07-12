@@ -219,7 +219,7 @@ class TestFullReservationFlow:
         self.conversation_handler.handle_message(chat_id, "5")
 
         # Select random strategy
-        self.conversation_handler.handle_message(chat_id, "2")
+        self.conversation_handler.handle_message(chat_id, "3")
         session = self.storage.get_user_session(chat_id)
         assert session.train_info['seatStrategy'] == 'random'
 

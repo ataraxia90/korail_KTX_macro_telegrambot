@@ -248,10 +248,13 @@ class TelegramWebhook(Resource):
                     self.storage.save_user_session(session)
 
                 # Start appropriate payment reminders
-                # For random seating, multi-reminder is already running (started on first seat)
+                # For per-seat modes, multi-reminder is already running (started on first seat)
                 # Don't start duplicate reminder service
-                if seat_strategy == "random":
-                    logger.info(f"Random seating complete - multi-reminder already running for chat_id={chat_id}")
+                multi_status = self.storage.get_multi_reservation_status(chat_id)
+                if seat_strategy in ("random", "flexible") and multi_status:
+                    logger.info(
+                        f"{seat_strategy} seating complete - multi-reminder already running for chat_id={chat_id}"
+                    )
                     # Multi-reservation reminder was started on first partial callback (status=2)
                     # It will continue until all seats are paid or expired
                 elif is_multi:
