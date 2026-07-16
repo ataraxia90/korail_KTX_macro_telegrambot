@@ -508,7 +508,9 @@ class RedisStorage(StorageInterface):
                 "dep_time": reservation.search_params.dep_time,
                 "max_dep_time": reservation.search_params.max_dep_time,
                 "train_type": reservation.search_params.train_type,
+                "train_type_display": reservation.search_params.train_type_display,
                 "special_option": reservation.search_params.special_option,
+                "special_option_display": reservation.search_params.special_option_display,
                 "passenger_count": reservation.search_params.passenger_count,
                 "seat_strategy": reservation.search_params.seat_strategy,
                 "split_enabled": reservation.search_params.split_enabled,
@@ -520,15 +522,25 @@ class RedisStorage(StorageInterface):
     def _deserialize_running_reservation(self, data: dict) -> RunningReservation:
         """Deserialize dict to RunningReservation."""
         p = data["search_params"]
+        provider = p.get("provider", "KTX")
+        train_type = p["train_type"]
+        special_option = p["special_option"]
         search_params = TrainSearchParams(
-            provider=p.get("provider", "KTX"),
+            provider=provider,
             dep_date=p["dep_date"],
             src_locate=p["src_locate"],
             dst_locate=p["dst_locate"],
             dep_time=p["dep_time"],
             max_dep_time=p["max_dep_time"],
-            train_type=p["train_type"],
-            special_option=p["special_option"],
+            train_type=train_type,
+            train_type_display=p.get(
+                "train_type_display",
+                "SRT" if provider.upper() == "SRT" else str(train_type).split(".")[-1]
+            ),
+            special_option=special_option,
+            special_option_display=p.get(
+                "special_option_display", str(special_option).split(".")[-1]
+            ),
             passenger_count=p["passenger_count"],
             seat_strategy=p["seat_strategy"],
             split_enabled=p.get("split_enabled", False),
