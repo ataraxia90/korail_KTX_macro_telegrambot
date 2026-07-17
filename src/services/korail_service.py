@@ -10,6 +10,7 @@ from korail2 import (
 )
 
 from config.settings import settings
+from utils.errors import safe_exception_text
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -58,7 +59,7 @@ class KorailService:
 
             return self._logged_in
         except Exception as e:
-            logger.error(f"Korail login error for user {username}: {e}")
+            logger.error(f"Korail login error for user {username}: {safe_exception_text(e)}")
             return False
 
     def _relogin(self) -> bool:
@@ -79,7 +80,7 @@ class KorailService:
                 logger.error("❌ Re-login failed")
             return self._logged_in
         except Exception as e:
-            logger.error(f"❌ Re-login error: {e}")
+            logger.error(f"❌ Re-login error: {safe_exception_text(e)}")
             self._logged_in = False
             return False
 
@@ -219,12 +220,16 @@ class KorailService:
             return []
         except Exception as e:
             if type(e).__name__ == 'NeedToLoginError':
-                logger.debug(f"🔒 Session expired during search, re-logging in: {e}")
+                logger.debug(
+                    f"🔒 Session expired during search, re-logging in: {safe_exception_text(e)}"
+                )
                 if self._relogin():
                     return []  # Will retry on next loop iteration
                 else:
                     raise
-            logger.error(f"❌ Error searching trains: {e}", exc_info=True)
+            logger.error(
+                f"❌ Error searching trains: {safe_exception_text(e)}", exc_info=True
+            )
             return []
 
     def reserve_train(
@@ -273,7 +278,7 @@ class KorailService:
             logger.debug(f"Train sold out during reservation attempt: {train}")
             return None
         except Exception as e:
-            error_msg = str(e)
+            error_msg = safe_exception_text(e)
             error_type = type(e).__name__
 
             # Check for duplicate reservation error
@@ -567,7 +572,9 @@ class KorailService:
             ]
             candidate_times = [time_value for time_value in candidate_times if time_value > 0]
         except Exception as e:
-            logger.warning(f"Failed to calculate Korail target train cutoff: {e}")
+            logger.warning(
+                f"Failed to calculate Korail target train cutoff: {safe_exception_text(e)}"
+            )
 
         if candidate_times:
             cutoff_hhmm = max(candidate_times)
@@ -630,7 +637,7 @@ class KorailService:
                 logger.warning(f"Would cancel reservation: {reservation}")
                 # self._korail_instance.cancel(reservation.rsv_id)
             except Exception as e:
-                logger.error(f"Failed to cancel reservation: {e}")
+                logger.error(f"Failed to cancel reservation: {safe_exception_text(e)}")
 
     def _extract_departure_time(self, train) -> int:
         """
@@ -650,7 +657,10 @@ class KorailService:
             time_str = "".join(time_part.split(":"))  # "0944"
             return int(time_str)
         except (IndexError, ValueError) as e:
-            logger.error(f"Failed to extract departure time from train: {train}, error: {e}")
+            logger.error(
+                f"Failed to extract departure time from train: {train}, "
+                f"error: {safe_exception_text(e)}"
+            )
             return 0
 
     def _filter_trains_by_date(self, trains: List, dep_date: str, verbose: bool = True) -> List:

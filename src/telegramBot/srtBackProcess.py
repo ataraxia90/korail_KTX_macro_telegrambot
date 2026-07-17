@@ -13,6 +13,7 @@ from config.settings import settings
 from models import MultiReservationStatus, ReservationPaymentStatus, SingleReservationInfo
 from services.srt_service import SrtService
 from storage.redis import RedisStorage
+from utils.errors import safe_exception_text
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -87,8 +88,12 @@ class SrtBackgroundReservationProcess:
                 else:
                     self._send_callback("❌ 예약 가능한 SRT 열차를 찾지 못했습니다.", status=1)
         except Exception as e:
-            logger.error(f"SRT reservation process error: {e}", exc_info=True)
-            self._send_callback(f"❌ SRT 예약 처리 중 오류가 발생했습니다.\n\n오류: {e}", status=1)
+            error_text = safe_exception_text(e)
+            logger.error(f"SRT reservation process error: {error_text}", exc_info=True)
+            self._send_callback(
+                f"❌ SRT 예약 처리 중 오류가 발생했습니다.\n\n오류: {error_text}",
+                status=1,
+            )
 
     def _run_flexible_reservation(self):
         """Try all SRT seats together first, then fall back to one-by-one booking."""
@@ -382,7 +387,7 @@ class SrtBackgroundReservationProcess:
             if response.status_code != 200:
                 logger.warning(f"SRT callback returned {response.status_code}")
         except Exception as e:
-            logger.error(f"Failed to send SRT callback: {e}")
+            logger.error(f"Failed to send SRT callback: {safe_exception_text(e)}")
 
 
 if __name__ == "__main__":

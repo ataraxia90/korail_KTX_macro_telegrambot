@@ -6,6 +6,7 @@ from typing import Optional, List, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from config.settings import settings
+from utils.errors import safe_exception_text
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -48,7 +49,7 @@ class SrtService:
             self._logged_in = bool(result)
             return self._logged_in
         except Exception as e:
-            logger.error(f"SRT login error for user {username}: {e}")
+            logger.error(f"SRT login error for user {username}: {safe_exception_text(e)}")
             self._logged_in = False
             return False
 
@@ -103,7 +104,7 @@ class SrtService:
                     time=dep_time_hhmm
                 )
         except Exception as e:
-            logger.error(f"SRT search error: {e}", exc_info=verbose)
+            logger.error(f"SRT search error: {safe_exception_text(e)}", exc_info=verbose)
             return []
 
         trains = self._filter_trains(trains or [], dep_date, dep_time_hhmm, max_dep_time)
@@ -124,7 +125,7 @@ class SrtService:
             except TypeError:
                 return self._srt_instance.reserve(train, passengers=passengers)
         except Exception as e:
-            logger.error(f"SRT reservation error: {e}")
+            logger.error(f"SRT reservation error: {safe_exception_text(e)}")
             return None
 
     def search_and_reserve_loop(
@@ -233,7 +234,9 @@ class SrtService:
             ]
             candidate_times = [time_value for time_value in candidate_times if time_value > 0]
         except Exception as e:
-            logger.warning(f"Failed to calculate SRT target train cutoff: {e}")
+            logger.warning(
+                f"Failed to calculate SRT target train cutoff: {safe_exception_text(e)}"
+            )
 
         if candidate_times:
             cutoff_hhmm = max(candidate_times)

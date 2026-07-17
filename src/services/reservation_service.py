@@ -11,6 +11,7 @@ from models import TrainSearchParams, RunningReservation, UserSession
 from storage.base import StorageInterface
 from services.korail_service import KorailService
 from services.telegram_service import TelegramService, MessageTemplates
+from utils.errors import safe_exception_text
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -145,7 +146,7 @@ class ReservationService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to start reservation process: {e}")
+            logger.error(f"Failed to start reservation process: {safe_exception_text(e)}")
             return False
 
     def cancel_reservation(self, chat_id: int) -> bool:
@@ -172,7 +173,10 @@ class ReservationService:
                     os.kill(reservation.process_id, signal.SIGTERM)
                     logger.info(f"Killed process {reservation.process_id}")
             except (ProcessLookupError, OSError) as e:
-                logger.warning(f"Process {reservation.process_id} could not be killed: {e}")
+                logger.warning(
+                    f"Process {reservation.process_id} could not be killed: "
+                    f"{safe_exception_text(e)}"
+                )
 
             # Clean up storage
             self.storage.delete_running_reservation(chat_id)
@@ -191,7 +195,7 @@ class ReservationService:
             return True
 
         except Exception as e:
-            logger.error(f"Error cancelling reservation: {e}")
+            logger.error(f"Error cancelling reservation: {safe_exception_text(e)}")
             return False
 
     def cancel_all_reservations(self, admin_chat_id: int) -> int:
@@ -232,7 +236,10 @@ class ReservationService:
                 count += 1
 
             except Exception as e:
-                logger.error(f"Error cancelling reservation {reservation.chat_id}: {e}")
+                logger.error(
+                    f"Error cancelling reservation {reservation.chat_id}: "
+                    f"{safe_exception_text(e)}"
+                )
 
         # Notify admin
         korail_ids = [r.korail_id for r in reservations]

@@ -92,6 +92,23 @@ class FakeSRTWithExpiredTarget(FakeSRT):
         return super().reserve(train, passengers=passengers, special_seat=special_seat)
 
 
+class BrokenStringConnectionError(ConnectionError):
+    def __str__(self):
+        return ConnectionError("nested connection error")
+
+
+class FakeSRTWithTransientBrokenConnection(FakeSRT):
+    def __init__(self, username, password, auto_login=False):
+        super().__init__(username, password, auto_login=auto_login)
+        self.search_attempts = 0
+
+    def search_train(self, src, dst, date, time):
+        self.search_attempts += 1
+        if self.search_attempts == 1:
+            raise BrokenStringConnectionError("temporary connection failure")
+        return [SimpleNamespace(dep_time="090000", name="recovered")]
+
+
 def test_srt_login_success_and_failure():
     service = SrtService(srt_cls=FakeSRT, seat_type_cls=FakeSeatType, adult_cls=FakeAdult)
 
@@ -188,3 +205,26 @@ def test_srt_search_and_reserve_loop_uses_seat_type_and_passengers():
     )
 
     assert reservation == "reserved:Suseo-Busan-20991231-0800:special_first:2"
+
+
+def test_srt_loop_retries_connection_error_with_broken_string_method():
+    service = SrtService(
+        srt_cls=FakeSRTWithTransientBrokenConnection,
+        seat_type_cls=FakeSeatType,
+        adult_cls=FakeAdult,
+    )
+    service.login("user", "ok")
+    service._search_interval = 0
+
+    reservation = service.search_and_reserve_loop(
+        dep_date="20991231",
+        src_locate="Suseo",
+        dst_locate="Busan",
+        dep_time="080000",
+        max_dep_time="1200",
+        passenger_count=1,
+        max_attempts=2,
+    )
+
+    assert reservation == "reserved:recovered:None:1"
+    assert service._srt_instance.search_attempts == 2

@@ -68,6 +68,16 @@ class FakeKorailWithEarlierSameDayResults(FakeKorail):
         ]
 
 
+class BrokenStringConnectionError(ConnectionError):
+    def __str__(self):
+        return ConnectionError("nested connection error")
+
+
+class FakeKorailWithBrokenConnection(FakeKorail):
+    def search_train(self, *args, **kwargs):
+        raise BrokenStringConnectionError("temporary connection failure")
+
+
 def test_korail_search_filters_out_next_day_overnight_trains():
     service = KorailService()
     service._korail_instance = FakeKorail()
@@ -107,6 +117,18 @@ def test_korail_search_can_include_sold_out_and_waiting_trains_for_summary():
 
     assert fake.include_no_seats is True
     assert fake.include_waiting_list is True
+
+
+def test_korail_search_handles_connection_error_with_broken_string_method():
+    service = KorailService()
+    service._korail_instance = FakeKorailWithBrokenConnection()
+    service._logged_in = True
+
+    trains = service.search_trains(
+        "20260701", "서울", "대전", "165000", "1700", verbose=False
+    )
+
+    assert trains == []
 
 
 def test_korail_loop_stops_after_last_target_train_departure():

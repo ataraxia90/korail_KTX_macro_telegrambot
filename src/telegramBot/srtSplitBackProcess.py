@@ -14,6 +14,7 @@ sys.path.insert(0, src_dir)
 
 from config.settings import settings
 from services.srt_service import SrtService
+from utils.errors import safe_exception_text
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -65,9 +66,10 @@ class SrtSplitBackgroundReservationProcess:
             result = self._run_split_worker()
             self._send_callback(result["message"], status=0 if result["success"] else 1, is_multi=True)
         except Exception as e:
-            logger.error(f"SRT split reservation process error: {e}", exc_info=True)
+            error_text = safe_exception_text(e)
+            logger.error(f"SRT split reservation process error: {error_text}", exc_info=True)
             self._send_callback(
-                f"❌ SRT 분할 예매 처리 중 오류가 발생했습니다.\n\n오류: {e}",
+                f"❌ SRT 분할 예매 처리 중 오류가 발생했습니다.\n\n오류: {error_text}",
                 status=1,
             )
 
@@ -607,7 +609,7 @@ class SrtSplitBackgroundReservationProcess:
                     status,
                 )
         except Exception as e:
-            logger.error(f"Failed to send SRT split callback: {e}")
+            logger.error(f"Failed to send SRT split callback: {safe_exception_text(e)}")
 
 
 if __name__ == "__main__":

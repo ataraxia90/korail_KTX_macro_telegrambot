@@ -22,6 +22,7 @@ from storage.redis import RedisStorage
 from services import KorailService, TelegramService, PaymentReminderService, MultiReservationReminderService
 from services.korail_service import DuplicateReservationError
 from models import MultiReservationStatus, SingleReservationInfo, ReservationPaymentStatus
+from utils.errors import safe_exception_text
 from utils.logger import get_logger, LoggerFactory
 
 logger = get_logger(__name__)
@@ -186,7 +187,9 @@ class BackgroundReservationProcess:
                 )
             except DuplicateReservationError as e:
                 # First duplicate detection - notify user but continue searching
-                logger.warning(f"Duplicate reservation detected (first time): {e}")
+                logger.warning(
+                    f"Duplicate reservation detected (first time): {safe_exception_text(e)}"
+                )
                 message = f"""
 ⚠️ 기존 예약 감지
 
@@ -221,13 +224,14 @@ class BackgroundReservationProcess:
                     logger.error("Duplicate error raised again - this shouldn't happen")
                     pass
             except requests.exceptions.RequestException as e:
-                logger.error(f"Network error during reservation: {e}")
+                error_text = safe_exception_text(e)
+                logger.error(f"Network error during reservation: {error_text}")
                 message = f"""
 🌐 네트워크 오류
 
 코레일 서버와 통신 중 오류가 발생했습니다.
 
-오류 내용: {str(e)}
+오류 내용: {error_text}
 
 💡 조치 방법:
 1. 인터넷 연결을 확인하세요
@@ -239,13 +243,14 @@ class BackgroundReservationProcess:
                 self._send_callback(message, status=1)
                 return
             except ValueError as e:
-                logger.error(f"Invalid data during reservation: {e}")
+                error_text = safe_exception_text(e)
+                logger.error(f"Invalid data during reservation: {error_text}")
                 message = f"""
 ⚠️ 입력 데이터 오류
 
 입력하신 정보에 문제가 있습니다.
 
-오류 내용: {str(e)}
+오류 내용: {error_text}
 
 💡 조치 방법:
 1. 역 이름을 확인하세요 (예: 서울, 부산)
@@ -257,12 +262,15 @@ class BackgroundReservationProcess:
                 return
             except Exception as e:
                 # Catch any other unexpected errors from the loop
-                logger.error(f"Unexpected error in reservation loop: {e}", exc_info=True)
+                error_text = safe_exception_text(e)
+                logger.error(
+                    f"Unexpected error in reservation loop: {error_text}", exc_info=True
+                )
                 message = f"""
 ❌ 예약 검색 중 예상치 못한 오류
 
 오류 유형: {type(e).__name__}
-오류 내용: {str(e)}
+오류 내용: {error_text}
 
 💡 조치 방법:
 1. /cancel 후 다시 시도하세요
@@ -305,7 +313,10 @@ class BackgroundReservationProcess:
                     try:
                         self._create_multi_reservation_status(all_reservations, total_seats)
                     except Exception as e:
-                        logger.error(f"Failed to create multi-reservation status: {e}", exc_info=True)
+                        logger.error(
+                            f"Failed to create multi-reservation status: {safe_exception_text(e)}",
+                            exc_info=True,
+                        )
                         # Non-critical error - reservation succeeded, just reminder setup failed
                         # Continue with callback
 
@@ -359,11 +370,13 @@ class BackgroundReservationProcess:
                 self._send_callback(message, status=0)
 
         except Exception as e:
-            logger.error(f"Error in reservation process: {e}", exc_info=True)
+            logger.error(
+                f"Error in reservation process: {safe_exception_text(e)}", exc_info=True
+            )
 
             # Build detailed error message
             error_type = type(e).__name__
-            error_msg = str(e)
+            error_msg = safe_exception_text(e)
 
             message = f"""
 ❌ 예약 프로세스 오류 발생
@@ -443,7 +456,10 @@ class BackgroundReservationProcess:
             )
 
         except Exception as e:
-            logger.error(f"Failed to update MultiReservationStatus: {e}", exc_info=True)
+            logger.error(
+                f"Failed to update MultiReservationStatus: {safe_exception_text(e)}",
+                exc_info=True,
+            )
 
     def _create_multi_reservation_status(self, all_reservations: list, total_seats: int) -> None:
         """
@@ -493,7 +509,10 @@ class BackgroundReservationProcess:
             )
 
         except Exception as e:
-            logger.error(f"Failed to create MultiReservationStatus: {e}", exc_info=True)
+            logger.error(
+                f"Failed to create MultiReservationStatus: {safe_exception_text(e)}",
+                exc_info=True,
+            )
 
     def _send_callback(self, message: str, status: int = 0, is_multi: bool = False,
                        total_seats: int = 1, seat_strategy: str = "consecutive"):
@@ -532,9 +551,13 @@ class BackgroundReservationProcess:
         except requests.exceptions.Timeout:
             logger.error(f"Callback timeout - main app may be down or slow")
         except requests.exceptions.ConnectionError as e:
-            logger.error(f"Failed to connect to main app for callback: {e}")
+            logger.error(
+                f"Failed to connect to main app for callback: {safe_exception_text(e)}"
+            )
         except Exception as e:
-            logger.error(f"Unexpected error sending callback: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error sending callback: {safe_exception_text(e)}", exc_info=True
+            )
 
     def _run_flexible_reservation(self):
         """
@@ -665,7 +688,10 @@ class BackgroundReservationProcess:
                 if reservation and reservation != "DUPLICATE":
                     return reservation
         except Exception as e:
-            logger.error(f"Flexible group reservation attempt failed: {e}", exc_info=True)
+            logger.error(
+                f"Flexible group reservation attempt failed: {safe_exception_text(e)}",
+                exc_info=True,
+            )
         return None
 
     def _try_reserve_single_once(self, seat_index: int):
@@ -691,7 +717,10 @@ class BackgroundReservationProcess:
                 if reservation and reservation != "DUPLICATE":
                     return reservation
         except Exception as e:
-            logger.error(f"Flexible single reservation attempt failed: {e}", exc_info=True)
+            logger.error(
+                f"Flexible single reservation attempt failed: {safe_exception_text(e)}",
+                exc_info=True,
+            )
         return None
 
     def _build_flexible_group_success_message(self, reservation, passenger_count: int) -> str:
@@ -730,11 +759,14 @@ class BackgroundReservationProcess:
             try:
                 reservation = self._reserve_single_seat_random(seat_index)
             except Exception as e:
-                logger.error(f"Failed to reserve seat {seat_index + 1}: {e}", exc_info=True)
+                error_text = safe_exception_text(e)
+                logger.error(
+                    f"Failed to reserve seat {seat_index + 1}: {error_text}", exc_info=True
+                )
                 error_msg = f"""
 ❌ {seat_index + 1}번째 좌석 예약 실패
 
-오류: {str(e)}
+오류: {error_text}
 
 💡 /cancel 후 다시 시도하세요.
 """
@@ -883,7 +915,10 @@ class BackgroundReservationProcess:
                 elif is_summary:
                     logger.debug(f"📊 Attempt #{attempts}: no trains found, retrying...")
             except Exception as e:
-                logger.error(f"❌ Search failed (attempt #{attempts}): {e}", exc_info=True)
+                logger.error(
+                    f"❌ Search failed (attempt #{attempts}): {safe_exception_text(e)}",
+                    exc_info=True,
+                )
                 time.sleep(self.korail._search_interval)
                 continue
 
