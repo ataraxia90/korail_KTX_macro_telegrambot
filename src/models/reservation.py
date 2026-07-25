@@ -4,6 +4,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, List
 
+from utils.datetime_utils import now_kst
+
 
 @dataclass
 class TrainSearchParams:
@@ -49,7 +51,7 @@ class TrainSearchParams:
             return False, "날짜 형식이 올바르지 않습니다 (YYYYMMDD)"
 
         # Validate date is not in the past
-        today = datetime.today().strftime("%Y%m%d")
+        today = now_kst().strftime("%Y%m%d")
         if self.dep_date < today:
             return False, "과거 날짜는 선택할 수 없습니다"
 

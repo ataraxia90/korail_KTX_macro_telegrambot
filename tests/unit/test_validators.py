@@ -4,9 +4,11 @@ Comprehensive tests for input validators.
 Tests all edge cases, boundary conditions, and error handling.
 """
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from utils.validators import InputValidator
+from utils.datetime_utils import now_kst
+from utils import validators
 
 
 class TestPhoneNumberValidation:
@@ -54,9 +56,9 @@ class TestDateValidation:
 
     def test_normalize_date_shortcuts(self):
         """Test relative date shortcuts."""
-        today = datetime.now().strftime("%Y%m%d")
-        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y%m%d")
-        day_after_tomorrow = (datetime.now() + timedelta(days=2)).strftime("%Y%m%d")
+        today = now_kst().strftime("%Y%m%d")
+        tomorrow = (now_kst() + timedelta(days=1)).strftime("%Y%m%d")
+        day_after_tomorrow = (now_kst() + timedelta(days=2)).strftime("%Y%m%d")
 
         assert InputValidator.normalize_date_input("오늘") == today
         assert InputValidator.normalize_date_input("0") == today
@@ -71,21 +73,34 @@ class TestDateValidation:
         """Test normal date strings are preserved."""
         assert InputValidator.normalize_date_input(" 20991231 ") == "20991231"
 
+    def test_relative_date_shortcut_uses_kst_at_utc_date_boundary(self, monkeypatch):
+        """UTC late evening must already be treated as the next day in Korea."""
+        kst = timezone(timedelta(hours=9), name="KST")
+        monkeypatch.setattr(
+            validators,
+            "now_kst",
+            lambda: datetime(2026, 7, 26, 8, 21, tzinfo=kst),
+        )
+
+        assert InputValidator.normalize_date_input("0") == "20260726"
+        assert InputValidator.validate_date("20260726")[0] is True
+        assert InputValidator.validate_date("20260725")[0] is False
+
     def test_valid_future_date(self):
         """Test valid future date."""
-        future_date = (datetime.now() + timedelta(days=7)).strftime("%Y%m%d")
+        future_date = (now_kst() + timedelta(days=7)).strftime("%Y%m%d")
         valid, _ = InputValidator.validate_date(future_date)
         assert valid is True
 
     def test_valid_today(self):
         """Test today's date is valid."""
-        today = datetime.now().strftime("%Y%m%d")
+        today = now_kst().strftime("%Y%m%d")
         valid, _ = InputValidator.validate_date(today)
         assert valid is True
 
     def test_invalid_past_date(self):
         """Test past date is invalid."""
-        past_date = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+        past_date = (now_kst() - timedelta(days=1)).strftime("%Y%m%d")
         valid, error = InputValidator.validate_date(past_date)
         assert valid is False
         assert "과거" in error or "오늘" in error
@@ -118,11 +133,11 @@ class TestDateValidation:
     def test_valid_leap_year(self):
         """Test leap year date (Feb 29 in leap year)."""
         # Find next leap year
-        year = datetime.now().year
+        year = now_kst().year
         while year % 4 != 0 or (year % 100 == 0 and year % 400 != 0):
             year += 1
 
-        if year > datetime.now().year:
+        if year > now_kst().year:
             date = f"{year}0229"
             valid, _ = InputValidator.validate_date(date)
             # Only valid if it's in the future
@@ -131,7 +146,7 @@ class TestDateValidation:
     def test_invalid_non_leap_year_feb29(self):
         """Test Feb 29 in non-leap year."""
         # 2023 is not a leap year
-        if datetime.now().year <= 2023:
+        if now_kst().year <= 2023:
             valid, error = InputValidator.validate_date("20230229")
             assert valid is False
 
@@ -492,14 +507,14 @@ class TestDateEnhancedValidation:
 
     def test_invalid_too_far_future(self):
         """Test date that's too far in the future."""
-        far_future = (datetime.now() + timedelta(days=400)).strftime("%Y%m%d")
+        far_future = (now_kst() + timedelta(days=400)).strftime("%Y%m%d")
         valid, error = InputValidator.validate_date(far_future)
         assert valid is False
         assert "기간" in error or "초과" in error
 
     def test_valid_with_whitespace(self):
         """Test valid date with whitespace."""
-        future_date = (datetime.now() + timedelta(days=7)).strftime("%Y%m%d")
+        future_date = (now_kst() + timedelta(days=7)).strftime("%Y%m%d")
         valid, _ = InputValidator.validate_date(f"  {future_date}  ")
         assert valid is True
 

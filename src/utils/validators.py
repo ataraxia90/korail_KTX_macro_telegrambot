@@ -3,6 +3,8 @@ import re
 from datetime import datetime, timedelta
 from typing import Tuple, Optional
 
+from utils.datetime_utils import now_kst
+
 
 class InputValidator:
     """Validator for user inputs in the reservation flow."""
@@ -83,7 +85,7 @@ class InputValidator:
         if normalized not in offsets:
             return date_str.strip()
 
-        return (datetime.today() + timedelta(days=offsets[normalized])).strftime("%Y%m%d")
+        return (now_kst() + timedelta(days=offsets[normalized])).strftime("%Y%m%d")
 
     @staticmethod
     def normalize_station_input(station: str, provider: str = "KTX") -> str:
@@ -159,13 +161,13 @@ class InputValidator:
             return False, f"유효하지 않은 날짜입니다. (예: 2월 30일은 존재하지 않습니다)"
 
         # Check if date is not in the past
-        today = datetime.today().strftime("%Y%m%d")
+        today_kst = now_kst()
+        today = today_kst.strftime("%Y%m%d")
         if date_str < today:
             return False, "과거 날짜는 선택할 수 없습니다."
 
         # Check if date is too far in the future (e.g., more than 1 year ahead)
-        from datetime import timedelta
-        max_future_date = (datetime.today() + timedelta(days=365)).strftime("%Y%m%d")
+        max_future_date = (today_kst + timedelta(days=365)).strftime("%Y%m%d")
         if date_str > max_future_date:
             return False, "예매 가능한 기간을 초과했습니다. (최대 1년 이내)"
 
