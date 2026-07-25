@@ -26,6 +26,12 @@ class Settings:
     SRT_USERID: Optional[str] = os.environ.get('SRT_USERID')
     SRT_USERPW: Optional[str] = os.environ.get('SRT_USERPW')
     SRT_SEARCH_INTERVAL: int = int(os.environ.get('SRT_SEARCH_INTERVAL', os.environ.get('SEARCH_INTERVAL', '1')))
+    SRT_MAX_CONSECUTIVE_SEARCH_ERRORS: int = int(
+        os.environ.get('SRT_MAX_CONSECUTIVE_SEARCH_ERRORS', '5')
+    )
+    SRT_SEARCH_BACKOFF_MAX_SECONDS: int = int(
+        os.environ.get('SRT_SEARCH_BACKOFF_MAX_SECONDS', '30')
+    )
     SRT_PAYMENT_URL: str = os.environ.get('SRT_PAYMENT_URL', 'https://etk.srail.kr/')
 
     # User Access Control

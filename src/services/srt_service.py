@@ -19,6 +19,10 @@ except ImportError:  # pragma: no cover - exercised when dependency is absent lo
     Adult = None
 
 
+class SrtSearchUnavailableError(RuntimeError):
+    """Raised when repeated SRT search failures make the search unusable."""
+
+
 class SrtService:
     """Service for interacting with the SRTrain SRT API."""
 
@@ -28,11 +32,19 @@ class SrtService:
         self._adult_cls = adult_cls or Adult
         self._srt_instance: Optional[Any] = None
         self._logged_in = False
+        self._username: Optional[str] = None
+        self._password: Optional[str] = None
         self._search_interval = settings.SRT_SEARCH_INTERVAL
+        self._max_consecutive_search_errors = settings.SRT_MAX_CONSECUTIVE_SEARCH_ERRORS
+        self._search_backoff_max = settings.SRT_SEARCH_BACKOFF_MAX_SECONDS
+        self._consecutive_search_errors = 0
+        self.last_search_error: Optional[str] = None
         self.last_stop_reason: Optional[str] = None
 
     def login(self, username: str, password: str) -> bool:
         """Login to SRT with credentials."""
+        self._username = username
+        self._password = password
         if not self._srt_cls:
             logger.error("SRTrain is not installed")
             return False
@@ -104,9 +116,33 @@ class SrtService:
                     time=dep_time_hhmm
                 )
         except Exception as e:
-            logger.error(f"SRT search error: {safe_exception_text(e)}", exc_info=verbose)
+            error_text = safe_exception_text(e)
+            self.last_search_error = error_text
+            self._consecutive_search_errors += 1
+            error_count = self._consecutive_search_errors
+            is_invalid_netfunnel = self._is_invalid_netfunnel_error(error_text)
+
+            if error_count == 1 or error_count >= self._max_consecutive_search_errors:
+                logger.error(
+                    "SRT search error (%s/%s): %s",
+                    error_count,
+                    self._max_consecutive_search_errors,
+                    error_text,
+                    exc_info=verbose,
+                )
+
+            if is_invalid_netfunnel:
+                self._recover_session()
+
+            if error_count >= self._max_consecutive_search_errors:
+                raise SrtSearchUnavailableError(
+                    "SRT 조회가 연속으로 실패하여 예약 검색을 중단했습니다. "
+                    f"잠시 후 다시 시도해 주세요. 마지막 오류: {error_text}"
+                ) from e
             return []
 
+        self._consecutive_search_errors = 0
+        self.last_search_error = None
         trains = self._filter_trains(trains or [], dep_date, dep_time_hhmm, max_dep_time)
 
         return trains
@@ -198,7 +234,37 @@ class SrtService:
                 if reservation:
                     return reservation
 
-            time.sleep(self._search_interval)
+            time.sleep(self._get_search_retry_delay())
+
+    def _get_search_retry_delay(self) -> float:
+        """Apply bounded exponential backoff after search errors."""
+        if not self.last_search_error:
+            return self._search_interval
+
+        exponent = max(0, self._consecutive_search_errors - 1)
+        return min(
+            max(1, self._search_interval) * (2 ** exponent),
+            self._search_backoff_max,
+        )
+
+    def _is_invalid_netfunnel_error(self, error_text: str) -> bool:
+        normalized = error_text.lower()
+        return "netfunnel" in normalized and "invalid id" in normalized
+
+    def _recover_session(self) -> bool:
+        """Recreate the SRT client after a stale NetFunnel/session failure."""
+        if not self._username or self._password is None:
+            return False
+
+        logger.warning(
+            "Recreating SRT session after NetFunnel authentication failure "
+            "(consecutive_errors=%s)",
+            self._consecutive_search_errors,
+        )
+        self._logged_in = False
+        self._srt_instance = None
+        return self.login(self._username, self._password)
+
 
     def _get_search_cutoff_time(
         self,

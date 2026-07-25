@@ -2,7 +2,9 @@
 from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 
-from services.srt_service import SrtService
+import pytest
+
+from services.srt_service import SrtSearchUnavailableError, SrtService
 from services import srt_service
 
 KST = timezone(timedelta(hours=9), name="KST")
@@ -107,6 +109,19 @@ class FakeSRTWithTransientBrokenConnection(FakeSRT):
         if self.search_attempts == 1:
             raise BrokenStringConnectionError("temporary connection failure")
         return [SimpleNamespace(dep_time="090000", name="recovered")]
+
+
+class FakeSRTWithInvalidNetFunnel(FakeSRT):
+    instances = 0
+
+    def __init__(self, username, password, auto_login=False):
+        super().__init__(username, password, auto_login=auto_login)
+        type(self).instances += 1
+
+    def search_train(self, src, dst, date, time, available_only=True):
+        raise RuntimeError(
+            "Failed to complete NetFunnel: 5001:506:msg=\"Invalid ID\""
+        )
 
 
 def test_srt_login_success_and_failure():
@@ -228,3 +243,33 @@ def test_srt_loop_retries_connection_error_with_broken_string_method():
 
     assert reservation == "reserved:recovered:None:1"
     assert service._srt_instance.search_attempts == 2
+
+
+def test_srt_loop_recovers_session_then_stops_after_repeated_netfunnel_errors(monkeypatch):
+    FakeSRTWithInvalidNetFunnel.instances = 0
+    service = SrtService(
+        srt_cls=FakeSRTWithInvalidNetFunnel,
+        seat_type_cls=FakeSeatType,
+        adult_cls=FakeAdult,
+    )
+    service._max_consecutive_search_errors = 3
+    service._search_interval = 1
+    service._search_backoff_max = 30
+    sleep_delays = []
+    monkeypatch.setattr(srt_service.time, "sleep", sleep_delays.append)
+    service.login("user", "ok")
+
+    with pytest.raises(SrtSearchUnavailableError, match="연속으로 실패"):
+        service.search_and_reserve_loop(
+            dep_date="20991231",
+            src_locate="Suseo",
+            dst_locate="Busan",
+            dep_time="080000",
+            max_dep_time="1200",
+            passenger_count=1,
+        )
+
+    assert FakeSRTWithInvalidNetFunnel.instances == 4
+    assert sleep_delays == [2]
+    assert service._consecutive_search_errors == 3
+    assert "Invalid ID" in service.last_search_error
