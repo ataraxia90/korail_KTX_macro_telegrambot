@@ -8,10 +8,13 @@ KST = timezone(timedelta(hours=9), name="KST")
 
 
 class FakeKorailTrain:
-    def __init__(self, dep_date, dep_time, name):
+    def __init__(self, dep_date, dep_time, name, dep_name="대전", arr_name="서울"):
         self.dep_date = dep_date
         self.dep_time = dep_time
         self.name = name
+        self.train_no = name
+        self.dep_name = dep_name
+        self.arr_name = arr_name
 
     def __str__(self):
         return f"[KTX] {self.dep_date[4:6]}월 {self.dep_date[6:8]}일 대전~서울({self.dep_time[:2]}:{self.dep_time[2:4]}~09:30)"
@@ -68,6 +71,21 @@ class FakeKorailWithEarlierSameDayResults(FakeKorail):
         ]
 
 
+class FakeKorailWithAdjacentStationResult(FakeKorail):
+    def search_train(self, *args, **kwargs):
+        return [
+            FakeKorailTrain("20260815", "140600", "292"),
+            FakeKorailTrain(
+                "20260815",
+                "140900",
+                "586",
+                dep_name="서대전",
+                arr_name="용산",
+            ),
+            FakeKorailTrain("20260815", "143500", "210"),
+        ]
+
+
 class BrokenStringConnectionError(ConnectionError):
     def __str__(self):
         return ConnectionError("nested connection error")
@@ -117,6 +135,35 @@ def test_korail_search_can_include_sold_out_and_waiting_trains_for_summary():
 
     assert fake.include_no_seats is True
     assert fake.include_waiting_list is True
+
+
+def test_korail_search_filters_out_adjacent_station_results():
+    service = KorailService()
+    service._korail_instance = FakeKorailWithAdjacentStationResult()
+    service._logged_in = True
+
+    trains = service.search_trains(
+        "20260815", "대전", "서울", "140000", "1438", verbose=False
+    )
+
+    assert [train.train_no for train in trains] == ["292", "210"]
+
+
+def test_korail_reservation_rechecks_requested_route():
+    fake = FakeKorailWithAdjacentStationResult()
+    service = KorailService()
+    service._korail_instance = fake
+    service._logged_in = True
+    train = service.search_trains(
+        "20260815", "대전", "서울", "140000", "1438", verbose=False
+    )[0]
+    train.dep_name = "서대전"
+    train.arr_name = "용산"
+
+    reservation = service.reserve_train(train)
+
+    assert reservation is None
+    assert fake.reserve_called is False
 
 
 def test_korail_search_handles_connection_error_with_broken_string_method():

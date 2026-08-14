@@ -30,6 +30,7 @@ class KorailService:
         self._relogin_interval: int = 30 * 60  # 30 minutes
         self._relogin_count: int = 0
         self.last_stop_reason: Optional[str] = None
+        self._route_mismatch_log_keys = set()
 
         # Log class methods to verify correct version is loaded
         logger.debug(f"KorailService initialized with methods: {[m for m in dir(self) if not m.startswith('_')]}")
@@ -170,6 +171,12 @@ class KorailService:
                             logger.debug(f"    Special seats: {train.special_seat}")
 
             trains = self._filter_trains_by_date(trains or [], dep_date, verbose)
+            trains = self._filter_trains_by_station(
+                trains,
+                src_locate,
+                dst_locate,
+                verbose,
+            )
 
             # Filter by requested departure time range. Some providers may return
             # earlier trains than requested, so enforce both bounds locally.
@@ -252,6 +259,20 @@ class KorailService:
         """
         if not self._logged_in or not self._korail_instance:
             raise ValueError("Must login before reserving")
+
+        requested_src = getattr(train, "_requested_src_locate", None)
+        requested_dst = getattr(train, "_requested_dst_locate", None)
+        if requested_src and requested_dst and not self._train_matches_route(
+            train, requested_src, requested_dst
+        ):
+            logger.error(
+                "Blocked reservation for route-mismatched train: "
+                f"requested={requested_src}->{requested_dst}, "
+                f"actual={getattr(train, 'dep_name', None)}->"
+                f"{getattr(train, 'arr_name', None)}, "
+                f"train_no={getattr(train, 'train_no', 'unknown')}"
+            )
+            return None
 
         try:
             # Create passenger list
@@ -676,6 +697,65 @@ class KorailService:
             filtered_trains.append(train)
 
         return filtered_trains
+
+    def _filter_trains_by_station(
+        self,
+        trains: List,
+        src_locate: str,
+        dst_locate: str,
+        verbose: bool = True,
+    ) -> List:
+        """Keep only trains whose actual route exactly matches the request."""
+        filtered_trains = []
+
+        for train in trains:
+            if not self._train_matches_route(train, src_locate, dst_locate):
+                actual_src = getattr(train, "dep_name", None)
+                actual_dst = getattr(train, "arr_name", None)
+                train_no = getattr(train, "train_no", "unknown")
+                mismatch_key = (
+                    self._normalize_station_name(src_locate),
+                    self._normalize_station_name(dst_locate),
+                    self._normalize_station_name(actual_src),
+                    self._normalize_station_name(actual_dst),
+                    str(train_no),
+                )
+                message = (
+                    "Rejected adjacent-station result: "
+                    f"requested={src_locate}->{dst_locate}, "
+                    f"actual={actual_src}->{actual_dst}, train_no={train_no}"
+                )
+                if mismatch_key not in self._route_mismatch_log_keys:
+                    self._route_mismatch_log_keys.add(mismatch_key)
+                    logger.warning(message)
+                elif verbose:
+                    logger.debug(message)
+                continue
+
+            # Preserve the requested route so reserve_train can verify it again.
+            train._requested_src_locate = src_locate
+            train._requested_dst_locate = dst_locate
+            filtered_trains.append(train)
+
+        return filtered_trains
+
+    @classmethod
+    def _train_matches_route(cls, train, src_locate: str, dst_locate: str) -> bool:
+        actual_src = cls._normalize_station_name(getattr(train, "dep_name", None))
+        actual_dst = cls._normalize_station_name(getattr(train, "arr_name", None))
+        requested_src = cls._normalize_station_name(src_locate)
+        requested_dst = cls._normalize_station_name(dst_locate)
+        return bool(
+            actual_src
+            and actual_dst
+            and actual_src == requested_src
+            and actual_dst == requested_dst
+        )
+
+    @staticmethod
+    def _normalize_station_name(value) -> str:
+        name = "" if value is None else str(value).strip()
+        return name[:-1].strip() if name.endswith("역") else name
 
     def _extract_departure_date(self, train, requested_date: str) -> Optional[str]:
         for attr in ("dep_date", "departure_date", "date", "depDate"):
