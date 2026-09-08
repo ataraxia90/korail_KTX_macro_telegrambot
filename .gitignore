@@ -12,3 +12,5 @@ dist/
 build/
 .pytest_cache/
 .venv/
+.codex-deps/
+.codex-remote-attachments/

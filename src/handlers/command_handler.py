@@ -54,6 +54,9 @@ class CommandHandler:
             self.storage.save_user_session(session)
 
         # Update session state
+        if settings.UNIFIED_KTX:
+            session.reset()
+            session.train_info["provider"] = "KTX"
         session.in_progress = True
         session.last_action = UserProgress.STARTED
         self.storage.save_user_session(session)
@@ -140,6 +143,10 @@ class CommandHandler:
         params = session.last_search_params or session.search_params
         if not params:
             self.telegram.send_message(chat_id, "반복할 예약 조건이 없습니다. 먼저 한 번 예약 조건을 입력해주세요.")
+            return
+
+        if settings.UNIFIED_KTX and (params.provider.upper() != "KTX" or params.split_enabled):
+            self.telegram.send_message(chat_id, "기존 SRT 예약 조건은 통합 KTX 봇에서 재사용할 수 없습니다. /start로 새 조건을 입력해주세요.")
             return
 
         if not session.credentials:

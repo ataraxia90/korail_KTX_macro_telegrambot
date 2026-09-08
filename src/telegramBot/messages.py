@@ -349,6 +349,13 @@ class Messages:
     @staticmethod
     def welcome_message():
         """Welcome message (compatibility method)"""
+        from config.settings import settings
+        if settings.UNIFIED_KTX:
+            return Messages.WELCOME.replace(
+                "기차 예매 봇", "통합 KTX 예매 봇"
+            ).replace(
+                "본 프로그램은", "수서 출발·도착 열차도 코레일 통합회원 계정으로 예약합니다.\n\n본 프로그램은"
+            )
         return Messages.WELCOME
 
     @staticmethod

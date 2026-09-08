@@ -62,6 +62,9 @@ class ReservationService:
             True if process started successfully
         """
         try:
+            if settings.UNIFIED_KTX and (search_params.provider.upper() != "KTX" or search_params.split_enabled):
+                self.telegram.send_message(chat_id, "통합 KTX 예약 조건이 아닙니다. /start로 새 조건을 입력해주세요.")
+                return False
             existing = self.storage.get_running_reservation(chat_id)
             if existing:
                 self.telegram.send_message(chat_id, "이미 진행 중인 예약이 있습니다. /cancel 후 다시 시도해 주세요.")

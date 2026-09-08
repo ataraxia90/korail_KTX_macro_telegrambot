@@ -60,6 +60,10 @@ class ConversationHandler:
             )
             return
 
+        if settings.UNIFIED_KTX and session.train_info.get("provider", "KTX") != "KTX":
+            self.telegram.send_message(chat_id, "통합 KTX 봇에서는 코레일 계정으로 다시 시작해주세요. /start")
+            return
+
         # Check if already finding ticket
         if session.last_action == UserProgress.FINDING_TICKET:
             self._handle_already_processing(chat_id, session)
@@ -117,6 +121,12 @@ class ConversationHandler:
         is_yes, error = InputValidator.validate_yes_no(text)
 
         if is_yes is True:
+            if settings.UNIFIED_KTX:
+                session.train_info["provider"] = "KTX"
+                session.last_action = UserProgress.PROVIDER_INPUT_SUCCESS
+                self.storage.save_user_session(session)
+                self.telegram.send_message(chat_id, MessageTemplates.request_phone_number("KTX"))
+                return
             session.last_action = UserProgress.START_ACCEPTED
             self.storage.save_user_session(session)
             from telegramBot.messages import Messages
@@ -131,6 +141,12 @@ class ConversationHandler:
 
     def _handle_provider_input(self, chat_id: int, text: str, session: UserSession) -> None:
         """Handle KTX/SRT provider selection."""
+        if settings.UNIFIED_KTX:
+            session.train_info["provider"] = "KTX"
+            session.last_action = UserProgress.PROVIDER_INPUT_SUCCESS
+            self.storage.save_user_session(session)
+            self.telegram.send_message(chat_id, MessageTemplates.request_phone_number("KTX"))
+            return
         if text not in ("1", "2"):
             self.telegram.send_message(chat_id, "1(KTX) 또는 2(SRT)를 입력해 주세요.")
             return
@@ -145,6 +161,8 @@ class ConversationHandler:
 
     def _handle_admin_login(self, chat_id: int, session: UserSession) -> None:
         """Handle magic admin login."""
+        if settings.UNIFIED_KTX:
+            session.train_info["provider"] = "KTX"
         provider = session.train_info.get("provider", "KTX")
         if provider == "SRT":
             username = settings.SRT_USERID

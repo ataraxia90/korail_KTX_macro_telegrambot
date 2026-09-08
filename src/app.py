@@ -7,6 +7,7 @@ import sys
 from flask import Flask
 from flask_restful import Api
 from flask_cors import CORS
+from redis.exceptions import RedisError
 
 from config.settings import settings
 from storage.redis import RedisStorage
@@ -54,6 +55,17 @@ except Exception as e:
 telegram_service = TelegramService(settings.TELEGRAM_BOT_TOKEN)
 reservation_service = ReservationService(storage, telegram_service)
 payment_reminder_service = PaymentReminderService(storage, telegram_service)
+
+
+@application.get('/health')
+def health():
+    """Check the dependency required for session and reservation state."""
+    try:
+        storage.redis.ping()
+    except RedisError:
+        return {'status': 'unavailable'}, 503
+    return {'status': 'ok'}, 200
+
 
 # Configure API resources with dependency injection
 api.add_resource(

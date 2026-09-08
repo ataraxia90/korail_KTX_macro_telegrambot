@@ -1,5 +1,14 @@
 # 기차 예매 텔레그램 챗봇
 
+## 통합 KTX 운영 브랜치
+
+`codex/unified-ktx-production`은 기존 텔레그램 봇을 통합 KTX로 전환하기 위한 운영 브랜치입니다.
+기존 Render 서비스의 배포 브랜치를 변경하고 `UNIFIED_KTX=True`를 설정합니다.
+기존 봇 토큰·서비스 URL·웹훅·Redis DB를 유지합니다. Blueprint의 DB 기본값은 기존과 같은 1입니다.
+수서 경로도 코레일 통합회원 계정과 Korail 조회·예약 흐름을 사용합니다.
+연결 절차 및 지원 범위는 [통합 KTX 배포 안내](docs/unified-ktx-production.md)를 참고하세요.
+아래 KTX/SRT 선택·SRT 분할예매 안내는 `UNIFIED_KTX=False`인 기존 모드 기준입니다.
+
 ## SRT 사용법
 
 이 봇은 기존 KTX/Korail 예약 흐름과 SRT 예약 흐름을 함께 지원합니다. `/start` 이후 열차 서비스 선택 단계에서 `1`은 KTX, `2`는 SRT입니다.
@@ -37,23 +46,12 @@ FLASK_DEBUG=False
 
 이 저장소에는 `render.yaml` Blueprint가 포함되어 있습니다.
 
-1. 현재 브랜치(`srt-mvp`)를 GitHub에 push합니다.
-2. Render Dashboard에서 **New +** → **Blueprint**를 선택하고 이 저장소를 연결합니다.
-3. 생성될 Web Service의 비밀 환경변수를 입력합니다.
-   - `BOTTOKEN`
-   - `USERID`, `USERPW` (KTX 매직 로그인용)
-   - `SRT_USERID`, `SRT_USERPW` (SRT 매직 로그인용)
-   - `ALLOW_LIST` (비워두면 전체 허용)
-   - `REDIS_URL` (기존 `ktx-redis` Key Value의 Internal Redis URL 또는 Connection String)
-4. 배포가 끝나면 Web Service URL 뒤에 `/telebot`을 붙여 Telegram webhook으로 설정합니다.
+1. 현재 브랜치(`codex/unified-ktx-production`)를 GitHub에 push합니다.
+2. 진행 중인 검색과 결제 알림을 정리한 후, 기존 Render Web Service의 배포 브랜치를 위 브랜치로 변경합니다.
+3. 기존 `BOTTOKEN`, `ALLOW_LIST`, `REDIS_URL`, 실제 사용 중인 `REDIS_DB`를 유지하고 `UNIFIED_KTX=True`를 설정합니다. `USERID`, `USERPW`는 코레일 통합회원 계정인지 확인합니다.
+4. 배포 후 `/health`와 기존 봇의 `/start`를 확인합니다. 서비스 URL이 같으면 기존 웹훅도 유지합니다.
 
-```bash
-curl -X POST "https://api.telegram.org/bot${BOTTOKEN}/setWebhook" \
-  -H "Content-Type: application/json" \
-  -d "{\"url\":\"https://your-render-service.onrender.com/telebot\",\"drop_pending_updates\":true}"
-```
-
-Render에서는 `PORT`를 자동으로 읽고, `REDIS_URL`이 있으면 Redis 연결 문자열을 우선 사용합니다. 기존 KTX Redis와 함께 쓸 때는 `REDIS_DB=1`로 분리합니다.
+Render에서는 `PORT`를 자동으로 읽고, `REDIS_URL`이 있으면 Redis 연결 문자열을 사용합니다. `REDIS_DB`는 URL에 포함된 DB 번호보다 우선하므로 현재 실제 사용 중인 DB 번호와 일치시킵니다. 자세한 전환 및 복구 절차는 [통합 KTX 배포 안내](docs/unified-ktx-production.md)를 참고하세요.
 
 ## 빠른 시작
 
@@ -222,6 +220,27 @@ pipenv update korail2
 # requirements.txt 재생성
 make requirements
 ```
+
+### 통합 KTX/SRT 조회 Probe
+
+통합 앱/통합회원 전환 이후 `korail2`만으로 SRT/수서 경로를 조회할 수 있는지 확인하는 읽기 전용 스크립트입니다. 예약 함수는 호출하지 않습니다.
+
+```bash
+python scripts/korail_unified_srt_probe.py --date 20260901 --time 080000 --max-time 1200
+```
+
+기본 조회 경로:
+- 수서 → 부산
+- 수서 → 대전
+- 서울 → 부산
+
+필요하면 경로를 직접 지정할 수 있습니다.
+
+```bash
+python scripts/korail_unified_srt_probe.py --date 20260901 --route 수서:동대구 --route 서울:부산
+```
+
+환경변수 `USERID`, `USERPW`를 사용하며, 필요하면 `--username`, `--password`로 지정할 수 있습니다.
 
 ## 프로젝트 구조
 

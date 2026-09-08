@@ -11,6 +11,9 @@ from typing import Optional
 class Settings:
     """Application settings loaded from environment variables."""
 
+    # Enabled by the unified production deployment; legacy deployments keep both providers.
+    UNIFIED_KTX: bool = os.environ.get('UNIFIED_KTX', 'False').lower() in ('true', '1', 'yes')
+
     # Telegram Bot Configuration
     TELEGRAM_BOT_TOKEN: str = os.environ.get('BOTTOKEN', '')
     TELEGRAM_API_BASE_URL: str = "https://api.telegram.org/bot{token}"
