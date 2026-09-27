@@ -11,6 +11,7 @@ from korail2 import (
 
 from config.settings import settings
 from utils.errors import safe_exception_text
+from utils.login_diagnostics import capture_login_responses
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -46,21 +47,24 @@ class KorailService:
         Returns:
             True if login successful, False otherwise
         """
+        diagnostics = []
         try:
             self._korail_instance = K2MKorail(username, password, auto_login=False)
-            self._logged_in = self._korail_instance.login()
+            with capture_login_responses(self._korail_instance, (username, password)) as diagnostics:
+                self._logged_in = self._korail_instance.login()
 
             if self._logged_in:
                 self._username = username
                 self._password = password
                 self._last_login_time = time.time()
-                logger.info(f"Korail login successful for user: {username}")
+                logger.info("Korail login successful")
             else:
-                logger.warning(f"Korail login failed for user: {username}")
+                logger.warning("Korail login failed; response_metadata=%s", diagnostics)
 
             return self._logged_in
         except Exception as e:
-            logger.error(f"Korail login error for user {username}: {safe_exception_text(e)}")
+            self._logged_in = False
+            logger.error("Korail login error type=%s; response_metadata=%s", type(e).__name__, diagnostics)
             return False
 
     def _relogin(self) -> bool:
